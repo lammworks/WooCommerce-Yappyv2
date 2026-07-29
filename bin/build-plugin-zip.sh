@@ -49,6 +49,22 @@ mkdir -p "$BUILD"
 
 git archive --format=tar --prefix="$SLUG/" "$REF" | tar -x -C "$BUILD"
 
+# Fail loudly rather than ship a bad archive. export-ignore only covers what it
+# is told about, so anything that was committed by accident would otherwise ride
+# along silently — a nested build/ directory in particular, which quietly
+# triples the size of the ZIP with a copy of the plugin inside itself.
+for forbidden in build tests bin .github vendor composer.json composer.lock phpunit.xml.dist; do
+	if [ -e "$BUILD/$SLUG/$forbidden" ]; then
+		echo "error: $forbidden must not be in the distributable — check .gitattributes and .gitignore" >&2
+		exit 1
+	fi
+done
+
+if [ ! -f "$BUILD/$SLUG/$SLUG.php" ] || [ ! -f "$BUILD/$SLUG/readme.txt" ]; then
+	echo "error: the archive is missing the plugin bootstrap or readme.txt" >&2
+	exit 1
+fi
+
 ( cd "$BUILD" && zip -rq "$(basename "$ZIP")" "$SLUG" -x '*.DS_Store' )
 
 echo "Built $ZIP"
