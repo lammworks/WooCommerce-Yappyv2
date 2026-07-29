@@ -2,15 +2,25 @@
 /**
  * Amount formatting for the Yappy create-order call.
  *
- * Yappy validates the arithmetic of the amounts it receives and answers with
- * error E010 when they do not add up. Every value travels as a string with
- * exactly two decimals, and the plugin guarantees the identity
+ * The four amounts Yappy accepts map onto WooCommerce's own figures:
+ *
+ *     subtotal  <- the cart subtotal (line items, before tax and before coupons)
+ *     taxes     <- the order tax, or 0.00 when the store charges none
+ *     discount  <- the coupon discount, or 0.00 when none applies
+ *     total     <- the order total, exactly as WooCommerce recorded it
+ *
+ * Yappy's payload has no field for shipping or fees, so those ride along in the
+ * subtotal — otherwise the amounts would not add up to the total being charged.
+ * On a store that does not charge either, the subtotal transmitted is precisely
+ * the cart subtotal.
+ *
+ * Every value travels as a string with exactly two decimals, and the identity
  *
  *     total = subtotal + taxes - discount
  *
- * holds *after* rounding, by deriving the subtotal from the other three values
- * and absorbing any rounding residue there. That keeps the total Yappy charges
- * identical to the total WooCommerce recorded, which is the number that matters.
+ * is guaranteed to hold *after* rounding: any residue left by rounding the parts
+ * independently is absorbed into the subtotal, never into the total. The total
+ * Yappy charges therefore always equals the total WooCommerce recorded.
  *
  * @package WooCommerce_Yappy
  */
@@ -28,43 +38,48 @@ class WC_Yappy_Amounts {
 	const MINIMUM_TOTAL = 0.01;
 
 	/**
-	 * Split a total into the four amounts of the create-order payload.
+	 * Build the four amounts of the create-order payload.
 	 *
-	 * @param float $total    Order grand total.
-	 * @param float $taxes    Total tax included in the grand total.
-	 * @param float $discount Total discount already applied to the grand total.
+	 * @param float $total    Order grand total — the amount actually charged.
+	 * @param float $subtotal Cart subtotal: line items before tax and before coupons.
+	 * @param float $taxes    Order tax. Pass 0 when the store charges no tax.
+	 * @param float $discount Coupon discount. Pass 0 when no coupon applies.
+	 * @param float $extras   Amounts Yappy has no field for — shipping and fees.
 	 * @return array{total:string,subtotal:string,taxes:string,discount:string}
 	 * @throws InvalidArgumentException When the total is below the Yappy minimum.
 	 */
-	public static function split( $total, $taxes = 0.0, $discount = 0.0 ) {
+	public static function build( $total, $subtotal, $taxes = 0.0, $discount = 0.0, $extras = 0.0 ) {
 		$total    = round( (float) $total, 2 );
+		$subtotal = round( (float) $subtotal, 2 );
 		$taxes    = round( max( 0.0, (float) $taxes ), 2 );
 		$discount = round( max( 0.0, (float) $discount ), 2 );
+		$extras   = round( (float) $extras, 2 );
 
 		if ( $total < self::MINIMUM_TOTAL ) {
 			throw new InvalidArgumentException( 'Yappy requires a total of at least 0.01.' );
 		}
 
-		// Taxes can never exceed the total; a larger value would force a negative
-		// subtotal, which Yappy rejects.
+		// Tax can never exceed the total; a larger figure would only be possible
+		// from inconsistent input, and it would force a negative subtotal.
 		if ( $taxes > $total ) {
 			$taxes = $total;
 		}
 
-		$subtotal = round( $total + $discount - $taxes, 2 );
+		// Shipping and surcharges have nowhere else to go in the Yappy payload.
+		$subtotal = round( $subtotal + $extras, 2 );
 
-		// A discount larger than the net amount would also push the subtotal
-		// negative. Clamp the discount instead of shipping an invalid payload.
-		if ( $subtotal < 0 ) {
-			$discount = round( max( 0.0, $taxes - $total ), 2 );
-			$subtotal = round( $total + $discount - $taxes, 2 );
-		}
-
-		// Absorb any residue left by rounding the three inputs independently, so
-		// the identity holds exactly on the values actually transmitted.
+		// Absorb whatever the rounded parts still fail to account for, so the
+		// identity holds exactly on the strings that are transmitted.
 		$residue = round( $total - ( $subtotal + $taxes - $discount ), 2 );
 		if ( abs( $residue ) >= 0.005 ) {
 			$subtotal = round( $subtotal + $residue, 2 );
+		}
+
+		// Only reachable from internally inconsistent input. Keep the total and
+		// the identity intact by letting the discount take the difference.
+		if ( $subtotal < 0 ) {
+			$discount = round( $discount - $subtotal, 2 );
+			$subtotal = 0.0;
 		}
 
 		return array(

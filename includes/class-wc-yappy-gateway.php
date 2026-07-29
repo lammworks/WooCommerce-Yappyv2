@@ -514,10 +514,28 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	public function create_yappy_order( $order, $phone = '' ) {
 		$reference = WC_Yappy_Reference::generate( $order->get_id() );
 
-		$amounts = WC_Yappy_Amounts::split(
+		// These reconcile exactly against WC_Abstract_Order::calculate_totals(),
+		// which sets total = cart_total + fees + shipping + tax and
+		// discount_total = cart_subtotal - cart_total, with get_subtotal()
+		// returning that same cart_subtotal.
+		//
+		// The `true` on get_total_discount() is deliberate, not the default
+		// showing through. On a store with "Prices entered with tax" enabled part
+		// of a coupon's face value is tax, and WooCommerce splits it into
+		// discount_total (ex tax) and discount_tax. get_subtotal() is always ex
+		// tax and the tax travels in its own field, so the ex-tax half is the
+		// only one that keeps the amounts consistent; passing false would
+		// overstate the discount by exactly discount_tax.
+		//
+		// Shipping and fees ride in the subtotal because Yappy's payload has no
+		// field for either. On an order with neither, the subtotal sent is
+		// exactly the cart subtotal.
+		$amounts = WC_Yappy_Amounts::build(
 			$order->get_total(),
+			$order->get_subtotal(),
 			$order->get_total_tax(),
-			$order->get_total_discount()
+			$order->get_total_discount( true ),
+			(float) $order->get_shipping_total() + (float) $order->get_total_fees()
 		);
 
 		$args = array(

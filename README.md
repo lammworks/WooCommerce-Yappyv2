@@ -114,10 +114,43 @@ order is also kept in order meta, so a late notification for an earlier attempt 
 
 ### Amounts
 
-Yappy validates the arithmetic and answers `E010` when it does not hold. The plugin derives
-the subtotal from the other three values and absorbs any rounding residue there, so
-`total = subtotal + taxes − discount` holds exactly *on the transmitted strings* and the
-total Yappy charges always equals the total WooCommerce recorded.
+The four amounts map onto WooCommerce's own figures:
+
+| Yappy | WooCommerce |
+|---|---|
+| `subtotal` | `get_subtotal()` — line items, before tax and before coupons |
+| `taxes` | `get_total_tax()`, or `0.00` on a store that charges no tax |
+| `discount` | `get_total_discount( true )`, or `0.00` when no coupon applies |
+| `total` | `get_total()`, exactly as WooCommerce recorded it |
+
+These reconcile exactly against `WC_Abstract_Order::calculate_totals()`, which defines
+`total = cart_total + fees + shipping + tax` and `discount_total = cart_subtotal − cart_total`,
+with `get_subtotal()` returning that same `cart_subtotal`.
+
+WooCommerce has no setting for whether a discount applies to tax or shipping, because neither
+is a choice it offers: coupons never reduce the shipping cost — the only coupon/shipping
+control is the per-coupon *Allow free shipping* flag, which zeroes the cost outright and is
+already reflected in `get_shipping_total()` — and coupons are always applied to line items
+*before* tax, so `get_total_tax()` is by construction the tax on the discounted amount.
+
+The one setting that does change the discount figure is **WooCommerce → Settings → Tax →
+"Prices entered with tax"** (snapshotted per order as `get_prices_include_tax()`). With it on,
+part of a coupon's face value is tax, and WooCommerce splits the coupon into `discount_total`
+(ex tax) and `discount_tax`. The plugin passes `true` to `get_total_discount()` deliberately:
+the subtotal is always ex tax and the tax travels in its own field, so the ex-tax half is the
+only one that reconciles. Passing `false` would overstate the discount by exactly
+`discount_tax`.
+
+Yappy's payload has **no field for shipping or fees**, so those are added into the subtotal —
+otherwise the amounts would not add up to the total actually being charged, which is what
+`E010` ("el valor de los montos no es el correcto") appears to police. On an order with
+neither, the subtotal transmitted is precisely the cart subtotal.
+
+Any residue left by rounding the parts independently is absorbed into the subtotal, never the
+total, so `total = subtotal + taxes − discount` holds exactly *on the transmitted strings* and
+the amount Yappy charges always equals the amount WooCommerce recorded.
+
+Use `wc_yappy_create_order_args` if your store needs a different split.
 
 ## Filters
 
@@ -153,27 +186,54 @@ WordPress installation.
 
 ## Provenance of the API contract
 
+The contract implemented here was checked field by field, on 2026-07-29, against the official
+[*Documentación para nueva integración del Botón de Pago Yappy*](https://www.yappy.com.pa/comercial/desarrolladores/boton-de-pago-yappy-nueva-integracion/).
+Everything below is what that page specifies:
+
+* Both environment API hosts and both CDN URLs.
+* Step 1 — `POST payments/validate/merchant`, `Content-Type: application/json` only (no API
+  key: that belonged to the previous integration), body `{merchantId, urlDomain}`, response
+  `{status:{code,description}, body:{epochTime, token}}`.
+* Step 2 — `POST /payments/payment-wc`, headers `Authorization: <token>` and
+  `Content-Type: application/json`, the ten body fields, and the response triple
+  `{transactionId, token, documentName}`.
+* `orderId` as alphanumeric, min 1 and **max 15** characters; `discount`/`taxes`/`subtotal`
+  formatted `"0.00"` with a `"0.00"` minimum; `total` with a `"0.01"` minimum.
+* The four button events (`eventClick`, `eventSuccess`, `eventError`, `eventPayment`), plus
+  the `isYappyOnline` event and the `isButtonLoading` property.
+* The six button themes and the `rounded` attribute.
+* The IPN parameters and the hash recipe — base64-decode the secret, split on `.`, take the
+  first part as the HMAC-SHA256 key over `orderId + status + domain`, compared as hex.
+* The full error catalogue, E002 through E100.
+
+`paymentDate` is documented as "fecha de tipo epoch", and `epochTime` as "fecha en la que se
+inicia el proceso de Botón de pago". Echoing Yappy's own `epochTime` straight back as
+`paymentDate` is therefore exactly what the field is for, and it removes any clock-skew risk;
+`time()` is used only if Yappy omits the value.
+
+`aliasYappy` is **not required**, though the documentation lists it without saying so. Asking
+for it makes the payment noticeably smoother — the request goes straight to the customer's
+phone instead of making them scan — so *Ask for the phone number* is on by default and the
+field is pre-filled from the billing phone whenever that is a valid Panamanian mobile. Leaving
+it blank is a supported path, and the key is then omitted from the request entirely.
+
+The one thing the documentation does **not** settle is the arithmetic between the four amounts:
+only per-field minimums are given, yet `E010` clearly implies a cross-field rule. See
+[Amounts](#amounts) for what the plugin sends and why. A single sandbox transaction on an order
+that has shipping will confirm it.
+
+### Sandbox access
+
+The UAT environment is not open by default: Yappy runs a test programme you have to be
+enrolled in. Register the tester with a Gmail account (ideally the one on the Android device),
+then email botondepagoyappy@bgeneral.com with the merchant name, that address, the Panamanian
+mobile number, and the Android version. Yappy confirms once the invitations are sent.
+
+### Branding
+
 `assets/images/yappy.svg` is a neutral placeholder, **not** the official Yappy logo — replace
 it, or filter `wc_yappy_icon`, with the artwork from the Banco General brand kit. The checkout
 button itself is rendered by Yappy's own web component and always carries official branding.
-
-The integration contract above was reconstructed from three independent sources that agree on
-every field, because the official documentation page was not reachable from the environment
-this plugin was written in:
-
-* [`Lawiet/laravel-yappy-checkout-v2`](https://github.com/Lawiet/laravel-yappy-checkout-v2) —
-  states it is based on the PHP library from the new-integration page.
-* [`@devhubpty/yappy`](https://www.npmjs.com/package/@devhubpty/yappy) — states its types are
-  derived from the official Banco General documentation.
-* Published extracts of the official page itself (endpoint paths, CDN URL, the four button
-  events, the status codes).
-
-**Before going live, verify the payload against the official documentation** at
-<https://www.yappy.com.pa/comercial/desarrolladores/boton-de-pago-yappy-nueva-integracion/>
-and run a sandbox transaction end to end. The one field where the sources differ is
-`paymentDate`: the plugin sends the `epochTime` value Yappy itself returned in step 1, which
-sidesteps both the unit question and any clock skew, and falls back to `time()` only if Yappy
-omits it.
 
 ## License
 
