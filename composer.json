@@ -1,0 +1,21 @@
+{
+	"name": "lammworks/woocommerce-yappy",
+	"description": "Yappy Payment Button gateway for WooCommerce (Banco General, Panamá).",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.6"
+	},
+	"scripts": {
+		"test": "phpunit",
+		"lint": "find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l"
+	},
+	"config": {
+		"platform": {
+			"php": "8.1"
+		}
+	}
+}

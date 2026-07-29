@@ -1,0 +1,61 @@
+/**
+ * Styles for the Yappy payment page.
+ *
+ * Deliberately minimal: the button itself is rendered and styled by Yappy's own
+ * web component, so this only lays out the surrounding page.
+ */
+
+.wc-yappy {
+	max-width: 32rem;
+}
+
+.wc-yappy__total {
+	font-size: 1.125rem;
+	font-weight: 600;
+	margin-bottom: 1.25rem;
+}
+
+.wc-yappy__field {
+	margin-bottom: 1.25rem;
+}
+
+.wc-yappy__field label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 0.35rem;
+}
+
+.wc-yappy__field .input-text {
+	width: 100%;
+}
+
+.wc-yappy__hint {
+	display: block;
+	font-size: 0.875rem;
+	margin-top: 0.35rem;
+	opacity: 0.8;
+}
+
+.wc-yappy__notice {
+	margin-bottom: 1rem;
+}
+
+.wc-yappy__notice--info {
+	padding: 0.75rem 1rem;
+	border-left: 4px solid currentColor;
+	opacity: 0.85;
+}
+
+.wc-yappy__button {
+	margin-bottom: 1.25rem;
+	min-height: 3rem;
+}
+
+.wc-yappy__cancel {
+	font-size: 0.875rem;
+}
+
+.wc-yappy__button [hidden],
+.wc-yappy [hidden] {
+	display: none !important;
+}
