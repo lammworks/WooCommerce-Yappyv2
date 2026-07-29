@@ -5,7 +5,10 @@
 /.phpunit.result.cache
 /phpunit.xml
 
-# Build output
+# Build output. The directory matters as much as the archive: without it a
+# `git add -A` commits the staged plugin tree, and `git archive` then nests a
+# copy of the plugin inside its own release ZIP.
+/build/
 /*.zip
 
 # Editors / OS
