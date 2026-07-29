@@ -153,27 +153,55 @@ WordPress installation.
 
 ## Provenance of the API contract
 
+The contract implemented here was checked field by field, on 2026-07-29, against the official
+[*Documentación para nueva integración del Botón de Pago Yappy*](https://www.yappy.com.pa/comercial/desarrolladores/boton-de-pago-yappy-nueva-integracion/).
+Everything below is what that page specifies:
+
+* Both environment API hosts and both CDN URLs.
+* Step 1 — `POST payments/validate/merchant`, `Content-Type: application/json` only (no API
+  key: that belonged to the previous integration), body `{merchantId, urlDomain}`, response
+  `{status:{code,description}, body:{epochTime, token}}`.
+* Step 2 — `POST /payments/payment-wc`, headers `Authorization: <token>` and
+  `Content-Type: application/json`, the ten body fields, and the response triple
+  `{transactionId, token, documentName}`.
+* `orderId` as alphanumeric, min 1 and **max 15** characters; `discount`/`taxes`/`subtotal`
+  formatted `"0.00"` with a `"0.00"` minimum; `total` with a `"0.01"` minimum.
+* The four button events (`eventClick`, `eventSuccess`, `eventError`, `eventPayment`), plus
+  the `isYappyOnline` event and the `isButtonLoading` property.
+* The six button themes and the `rounded` attribute.
+* The IPN parameters and the hash recipe — base64-decode the secret, split on `.`, take the
+  first part as the HMAC-SHA256 key over `orderId + status + domain`, compared as hex.
+* The full error catalogue, E002 through E100.
+
+`paymentDate` is documented as "fecha de tipo epoch", and `epochTime` as "fecha en la que se
+inicia el proceso de Botón de pago". Echoing Yappy's own `epochTime` straight back as
+`paymentDate` is therefore exactly what the field is for, and it removes any clock-skew risk;
+`time()` is used only if Yappy omits the value.
+
+Two things the documentation does **not** settle, both worth confirming in a sandbox run:
+
+1. **Whether `aliasYappy` may be omitted.** The page lists it without marking it optional, and
+   describes it only as the customer's Panamanian number without the country-code prefix. This
+   plugin omits the key entirely when no valid number is available, on the understanding that
+   the component then falls back to a QR code. If Yappy in fact requires it, that request
+   comes back as `E100`; keep *Ask for the phone number* enabled to stay on the documented path.
+2. **The arithmetic between the four amounts.** Only per-field minimums are documented, yet
+   `E010` ("el valor de los montos no es el correcto") clearly implies a cross-field rule. The
+   plugin holds `total = subtotal + taxes − discount` exactly, which is both the standard
+   commerce identity and what the reference PHP implementations send.
+
+### Sandbox access
+
+The UAT environment is not open by default: Yappy runs a test programme you have to be
+enrolled in. Register the tester with a Gmail account (ideally the one on the Android device),
+then email botondepagoyappy@bgeneral.com with the merchant name, that address, the Panamanian
+mobile number, and the Android version. Yappy confirms once the invitations are sent.
+
+### Branding
+
 `assets/images/yappy.svg` is a neutral placeholder, **not** the official Yappy logo — replace
 it, or filter `wc_yappy_icon`, with the artwork from the Banco General brand kit. The checkout
 button itself is rendered by Yappy's own web component and always carries official branding.
-
-The integration contract above was reconstructed from three independent sources that agree on
-every field, because the official documentation page was not reachable from the environment
-this plugin was written in:
-
-* [`Lawiet/laravel-yappy-checkout-v2`](https://github.com/Lawiet/laravel-yappy-checkout-v2) —
-  states it is based on the PHP library from the new-integration page.
-* [`@devhubpty/yappy`](https://www.npmjs.com/package/@devhubpty/yappy) — states its types are
-  derived from the official Banco General documentation.
-* Published extracts of the official page itself (endpoint paths, CDN URL, the four button
-  events, the status codes).
-
-**Before going live, verify the payload against the official documentation** at
-<https://www.yappy.com.pa/comercial/desarrolladores/boton-de-pago-yappy-nueva-integracion/>
-and run a sandbox transaction end to end. The one field where the sources differ is
-`paymentDate`: the plugin sends the `epochTime` value Yappy itself returned in step 1, which
-sidesteps both the unit question and any clock skew, and falls back to `time()` only if Yappy
-omits it.
 
 ## License
 
