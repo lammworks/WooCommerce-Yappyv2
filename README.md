@@ -120,8 +120,26 @@ The four amounts map onto WooCommerce's own figures:
 |---|---|
 | `subtotal` | `get_subtotal()` — line items, before tax and before coupons |
 | `taxes` | `get_total_tax()`, or `0.00` on a store that charges no tax |
-| `discount` | `get_total_discount()`, or `0.00` when no coupon applies |
+| `discount` | `get_total_discount( true )`, or `0.00` when no coupon applies |
 | `total` | `get_total()`, exactly as WooCommerce recorded it |
+
+These reconcile exactly against `WC_Abstract_Order::calculate_totals()`, which defines
+`total = cart_total + fees + shipping + tax` and `discount_total = cart_subtotal − cart_total`,
+with `get_subtotal()` returning that same `cart_subtotal`.
+
+WooCommerce has no setting for whether a discount applies to tax or shipping, because neither
+is a choice it offers: coupons never reduce the shipping cost — the only coupon/shipping
+control is the per-coupon *Allow free shipping* flag, which zeroes the cost outright and is
+already reflected in `get_shipping_total()` — and coupons are always applied to line items
+*before* tax, so `get_total_tax()` is by construction the tax on the discounted amount.
+
+The one setting that does change the discount figure is **WooCommerce → Settings → Tax →
+"Prices entered with tax"** (snapshotted per order as `get_prices_include_tax()`). With it on,
+part of a coupon's face value is tax, and WooCommerce splits the coupon into `discount_total`
+(ex tax) and `discount_tax`. The plugin passes `true` to `get_total_discount()` deliberately:
+the subtotal is always ex tax and the tax travels in its own field, so the ex-tax half is the
+only one that reconciles. Passing `false` would overstate the discount by exactly
+`discount_tax`.
 
 Yappy's payload has **no field for shipping or fees**, so those are added into the subtotal —
 otherwise the amounts would not add up to the total actually being charged, which is what

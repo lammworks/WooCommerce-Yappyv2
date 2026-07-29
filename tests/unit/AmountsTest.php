@@ -120,6 +120,31 @@ class AmountsTest extends TestCase {
 	}
 
 	/**
+	 * On a store with "Prices entered with tax" enabled, part of a coupon's face
+	 * value is tax. WooCommerce splits it into discount_total (ex tax) and
+	 * discount_tax, and only the ex-tax half reconciles here — the subtotal is
+	 * always ex tax and the tax travels in its own field.
+	 *
+	 * Scenario: 10% tax, an item displayed at 110.00 (100.00 net), and a coupon
+	 * worth 11.00 at the display price — so discount_total 10.00, discount_tax
+	 * 1.00, tax charged 9.00, total 99.00.
+	 */
+	public function test_tax_inclusive_pricing_uses_the_ex_tax_discount() {
+		$amounts = WC_Yappy_Amounts::build( 99.00, 100.00, 9.00, 10.00 );
+
+		$this->assertSame( '99.00', $amounts['total'] );
+		$this->assertSame( '100.00', $amounts['subtotal'] );
+		$this->assertSame( '10.00', $amounts['discount'] );
+		$this->assertIdentityHolds( $amounts );
+
+		// The tax-inclusive discount (11.00) would not reconcile: sending it
+		// would force the subtotal up by discount_tax to keep the total intact.
+		$inclusive = WC_Yappy_Amounts::build( 99.00, 100.00, 9.00, 11.00 );
+		$this->assertSame( '101.00', $inclusive['subtotal'], 'The reconciliation must protect the total, not the subtotal.' );
+		$this->assertSame( '99.00', $inclusive['total'] );
+	}
+
+	/**
 	 * Surcharges added as WooCommerce fees are treated like shipping.
 	 */
 	public function test_fees_are_folded_into_the_subtotal() {
