@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out the tagged commit
+      - name: Check out the commit being built
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -42,7 +42,17 @@ jobs:
       - name: Build the plugin ZIP
         run: bin/build-plugin-zip.sh "${{ github.sha }}"
 
+      # Always available, so a manual run is a way to get an installable ZIP
+      # without cutting a release.
+      - name: Upload the ZIP as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: woocommerce-yappy-plugin
+          path: build/*.zip
+          if-no-files-found: error
+
       - name: Verify the tag matches the plugin version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           version="$(sed -n 's/^ \* Version:[[:space:]]*\([0-9][^[:space:]]*\).*/\1/p' woocommerce-yappy.php | head -n1)"
           tag="${GITHUB_REF_NAME#v}"
@@ -51,11 +61,19 @@ jobs:
             exit 1
           fi
 
+      # Runs for tags only. Creating a release through the GitHub UI also creates
+      # the tag, which fires this same workflow — so the release may already
+      # exist by the time we get here, and the ZIP is attached to it instead.
       - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/*.zip \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
-            --verify-tag
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" build/*.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" build/*.zip \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
