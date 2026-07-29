@@ -1,0 +1,14 @@
+# Everything listed here is development scaffolding: it belongs in the
+# repository but not in the plugin ZIP a shop owner installs. `git archive`
+# honours these, which is what bin/build-plugin-zip.sh uses to build the
+# distributable — so the ZIP can never accidentally ship the test suite, the
+# Composer dev dependencies, or the release tooling itself.
+
+/.github/          export-ignore
+/bin/              export-ignore
+/tests/            export-ignore
+/.gitattributes    export-ignore
+/.gitignore        export-ignore
+/composer.json     export-ignore
+/composer.lock     export-ignore
+/phpunit.xml.dist  export-ignore

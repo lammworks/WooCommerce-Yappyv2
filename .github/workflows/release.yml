@@ -1,0 +1,61 @@
+name: Release
+
+# Publishes a GitHub release with the installable plugin ZIP attached whenever a
+# v* tag is pushed. The tests gate the release, so a tag can never publish a
+# build that does not pass them.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Check the syntax of every PHP file
+        run: find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
+
+      - name: Install development dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run the test suite
+        run: composer test
+
+      - name: Build the plugin ZIP
+        run: bin/build-plugin-zip.sh "${{ github.sha }}"
+
+      - name: Verify the tag matches the plugin version
+        run: |
+          version="$(sed -n 's/^ \* Version:[[:space:]]*\([0-9][^[:space:]]*\).*/\1/p' woocommerce-yappy.php | head -n1)"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the plugin version $version"
+            exit 1
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/*.zip \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
