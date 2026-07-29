@@ -514,10 +514,15 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	public function create_yappy_order( $order, $phone = '' ) {
 		$reference = WC_Yappy_Reference::generate( $order->get_id() );
 
-		$amounts = WC_Yappy_Amounts::split(
+		// Shipping and fees are folded into the subtotal because Yappy's payload
+		// has no field for either; on an order with neither, the subtotal sent is
+		// exactly WooCommerce's cart subtotal.
+		$amounts = WC_Yappy_Amounts::build(
 			$order->get_total(),
+			$order->get_subtotal(),
 			$order->get_total_tax(),
-			$order->get_total_discount()
+			$order->get_total_discount(),
+			(float) $order->get_shipping_total() + (float) $order->get_total_fees()
 		);
 
 		$args = array(

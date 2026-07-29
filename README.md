@@ -114,10 +114,25 @@ order is also kept in order meta, so a late notification for an earlier attempt 
 
 ### Amounts
 
-Yappy validates the arithmetic and answers `E010` when it does not hold. The plugin derives
-the subtotal from the other three values and absorbs any rounding residue there, so
-`total = subtotal + taxes − discount` holds exactly *on the transmitted strings* and the
-total Yappy charges always equals the total WooCommerce recorded.
+The four amounts map onto WooCommerce's own figures:
+
+| Yappy | WooCommerce |
+|---|---|
+| `subtotal` | `get_subtotal()` — line items, before tax and before coupons |
+| `taxes` | `get_total_tax()`, or `0.00` on a store that charges no tax |
+| `discount` | `get_total_discount()`, or `0.00` when no coupon applies |
+| `total` | `get_total()`, exactly as WooCommerce recorded it |
+
+Yappy's payload has **no field for shipping or fees**, so those are added into the subtotal —
+otherwise the amounts would not add up to the total actually being charged, which is what
+`E010` ("el valor de los montos no es el correcto") appears to police. On an order with
+neither, the subtotal transmitted is precisely the cart subtotal.
+
+Any residue left by rounding the parts independently is absorbed into the subtotal, never the
+total, so `total = subtotal + taxes − discount` holds exactly *on the transmitted strings* and
+the amount Yappy charges always equals the amount WooCommerce recorded.
+
+Use `wc_yappy_create_order_args` if your store needs a different split.
 
 ## Filters
 
@@ -178,17 +193,16 @@ inicia el proceso de Botón de pago". Echoing Yappy's own `epochTime` straight b
 `paymentDate` is therefore exactly what the field is for, and it removes any clock-skew risk;
 `time()` is used only if Yappy omits the value.
 
-Two things the documentation does **not** settle, both worth confirming in a sandbox run:
+`aliasYappy` is **not required**, though the documentation lists it without saying so. Asking
+for it makes the payment noticeably smoother — the request goes straight to the customer's
+phone instead of making them scan — so *Ask for the phone number* is on by default and the
+field is pre-filled from the billing phone whenever that is a valid Panamanian mobile. Leaving
+it blank is a supported path, and the key is then omitted from the request entirely.
 
-1. **Whether `aliasYappy` may be omitted.** The page lists it without marking it optional, and
-   describes it only as the customer's Panamanian number without the country-code prefix. This
-   plugin omits the key entirely when no valid number is available, on the understanding that
-   the component then falls back to a QR code. If Yappy in fact requires it, that request
-   comes back as `E100`; keep *Ask for the phone number* enabled to stay on the documented path.
-2. **The arithmetic between the four amounts.** Only per-field minimums are documented, yet
-   `E010` ("el valor de los montos no es el correcto") clearly implies a cross-field rule. The
-   plugin holds `total = subtotal + taxes − discount` exactly, which is both the standard
-   commerce identity and what the reference PHP implementations send.
+The one thing the documentation does **not** settle is the arithmetic between the four amounts:
+only per-field minimums are given, yet `E010` clearly implies a cross-field rule. See
+[Amounts](#amounts) for what the plugin sends and why. A single sandbox transaction on an order
+that has shipping will confirm it.
 
 ### Sandbox access
 
