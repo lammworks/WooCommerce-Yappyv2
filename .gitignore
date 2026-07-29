@@ -1,0 +1,15 @@
+# Composer dev dependencies — the plugin itself has no runtime dependencies.
+/vendor/
+
+# PHPUnit
+/.phpunit.result.cache
+/phpunit.xml
+
+# Build output
+/*.zip
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
