@@ -203,7 +203,17 @@
 				}, params.pollInterval || 2000 );
 			} )
 			.catch( function () {
-				window.location.href = params.returnUrl;
+				// A transient network error must not be mistaken for a final
+				// result. Keep polling until the attempts are spent, then fall back
+				// to the order-received page, which explains a pending payment.
+				if ( attemptsLeft <= 0 ) {
+					window.location.href = params.returnUrl;
+					return;
+				}
+
+				window.setTimeout( function () {
+					pollUntilPaid( attemptsLeft - 1 );
+				}, params.pollInterval || 2000 );
 			} );
 	}
 
@@ -284,7 +294,9 @@
 		} );
 
 		button.addEventListener( 'eventSuccess', function () {
-			busy = false;
+			// `busy` is deliberately left set: the payment is in flight and the
+			// customer must not be able to press the button again and create a
+			// second Yappy order while confirmation is polling.
 			setLoading( false );
 			clearError();
 			pollUntilPaid( params.pollAttempts || 10 );
