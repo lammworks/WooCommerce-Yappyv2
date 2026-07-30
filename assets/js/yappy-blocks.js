@@ -1,9 +1,9 @@
 /**
  * Registers Yappy with the WooCommerce Checkout block.
  *
- * Yappy is paid on a dedicated page after the order is placed, so the block only
- * needs to render the method's label and description. The redirect returned by
- * `process_payment()` takes the customer to the Yappy button.
+ * The classic checkout launches Yappy inline. The Checkout block keeps the
+ * secure order-pay fallback, so it only renders the method's label and
+ * description and lets `process_payment()` redirect to the Yappy button.
  *
  * @package WooCommerce_Yappy
  */

@@ -67,7 +67,10 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	 */
 	public function __construct() {
 		$this->id                 = self::GATEWAY_ID;
-		$this->has_fields         = false;
+		// The Yappy component is rendered in the classic checkout. The customer
+		// presses that component once: WooCommerce creates the order and the
+		// component immediately opens the Yappy app (or its QR flow) in place.
+		$this->has_fields         = true;
 		$this->method_title       = __( 'Yappy', 'woocommerce-yappy' );
 		$this->method_description = __( 'Accept payments with Yappy, the mobile payment service from Banco General (Panamá). Uses the new Botón de Pago Yappy integration.', 'woocommerce-yappy' );
 		$this->icon               = apply_filters( 'wc_yappy_icon', WC_YAPPY_PLUGIN_URL . 'assets/images/yappy.svg' );
@@ -346,6 +349,35 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	}
 
 	/**
+	 * Render the official Yappy button in a classic WooCommerce checkout.
+	 *
+	 * The Checkout block retains the receipt-page fallback because its Store API
+	 * response cannot safely hand the short-lived Yappy credentials to this
+	 * classic JavaScript integration.
+	 *
+	 * @return void
+	 */
+	public function payment_fields() {
+		$this->enqueue_inline_checkout_assets();
+
+		$phone = '';
+		if ( 'yes' === $this->get_option( 'ask_phone', 'yes' ) && function_exists( 'WC' ) && WC()->checkout() ) {
+			$phone = WC_Yappy_Phone::normalize( WC()->checkout()->get_value( 'billing_phone' ) );
+		}
+
+		wc_get_template(
+			'yappy/inline-checkout.php',
+			array(
+				'description' => $this->get_description(),
+				'ask_phone'   => 'yes' === $this->get_option( 'ask_phone', 'yes' ),
+				'phone'       => $phone,
+			),
+			'',
+			WC_YAPPY_PLUGIN_DIR . 'templates/'
+		);
+	}
+
+	/**
 	 * Warn the shop manager about anything that would break the integration.
 	 *
 	 * @return void
@@ -371,7 +403,9 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	}
 
 	/**
-	 * Place the order and send the customer to the Yappy payment page.
+	 * Place the order and start Yappy when the classic checkout supplied its
+	 * inline request marker. Receipt pages remain the fallback for checkout
+	 * blocks, direct payment links and JavaScript-disabled browsers.
 	 *
 	 * No call to Yappy happens here: the Yappy order is only created once the
 	 * customer actually presses the button, because Yappy orders expire quickly.
@@ -389,6 +423,60 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 
 		$order->update_status( 'pending', __( 'Awaiting Yappy payment.', 'woocommerce-yappy' ) );
 
+		$inline = '1' === $this->get_checkout_post_field( 'wc_yappy_inline' );
+		if ( $inline ) {
+			$phone = $this->get_checkout_post_field( 'wc-yappy-phone' );
+
+			if ( '' !== $phone && '' === WC_Yappy_Phone::normalize( $phone ) ) {
+				wc_add_notice( __( 'Enter a valid Panamanian mobile number, for example 61234567. Leave it empty to pay by QR code.', 'woocommerce-yappy' ), 'error' );
+				return array( 'result' => 'failure' );
+			}
+
+			try {
+				$result = $this->create_yappy_order( $order, $phone );
+			} catch ( WC_Yappy_API_Exception $e ) {
+				$this->log->error(
+					'Could not create the inline Yappy order.',
+					array(
+						'order' => $order->get_id(),
+						'error' => $e->getMessage(),
+					)
+				);
+				wc_add_notice( $e->get_customer_message(), 'error' );
+				return array( 'result' => 'failure' );
+			} catch ( Exception $e ) {
+				$this->log->error(
+					'Could not prepare the inline Yappy order.',
+					array(
+						'order' => $order->get_id(),
+						'error' => $e->getMessage(),
+					)
+				);
+				wc_add_notice( __( 'Something went wrong with Yappy. Please try again.', 'woocommerce-yappy' ), 'error' );
+				return array( 'result' => 'failure' );
+			}
+
+			// WooCommerce returns any extra keys to its checkout JavaScript. The
+			// opaque credentials are required by the official Yappy component; no
+			// merchant secret is ever exposed to the browser.
+			return array(
+				'result'   => 'success',
+				// WooCommerce always follows a successful redirect. A same-document
+				// fragment prevents an empty redirect from reloading checkout while
+				// keeping its response contract intact for the inline JavaScript.
+				'redirect' => '#wc-yappy-inline',
+				'yappy'    => array_merge(
+					$result,
+					array(
+						'orderId'   => $order->get_id(),
+						'orderKey'  => $order->get_order_key(),
+						'nonce'     => wp_create_nonce( 'wc_yappy_pay_' . $order->get_id() ),
+						'returnUrl' => $this->get_return_url( $order ),
+					)
+				),
+			);
+		}
+
 		// The cart is deliberately left alone. WooCommerce clears it once the
 		// order leaves the pending state, so a customer who abandons the Yappy
 		// page still has their cart.
@@ -396,6 +484,24 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 			'result'   => 'success',
 			'redirect' => $order->get_checkout_payment_url( true ),
 		);
+	}
+
+	/**
+	 * Return one scalar checkout POST value without accepting nested input.
+	 * WooCommerce already verifies the checkout nonce before it reaches this
+	 * gateway; this method only normalises the optional inline fields.
+	 *
+	 * @param string $field Request field name.
+	 * @return string
+	 */
+	protected function get_checkout_post_field( $field ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		if ( ! isset( $_POST[ $field ] ) || ! is_scalar( $_POST[ $field ] ) ) {
+			return '';
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		return sanitize_text_field( wp_unslash( $_POST[ $field ] ) );
 	}
 
 	/**
@@ -484,6 +590,51 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	}
 
 	/**
+	 * Register the assets used to start Yappy from the classic checkout.
+	 *
+	 * @return void
+	 */
+	protected function enqueue_inline_checkout_assets() {
+		wp_enqueue_style(
+			'wc-yappy',
+			WC_YAPPY_PLUGIN_URL . 'assets/css/yappy.css',
+			array(),
+			WC_YAPPY_VERSION
+		);
+
+		wp_enqueue_script(
+			'wc-yappy-inline-checkout',
+			WC_YAPPY_PLUGIN_URL . 'assets/js/yappy-inline-checkout.js',
+			array( 'jquery', 'wc-checkout' ),
+			WC_YAPPY_VERSION,
+			true
+		);
+
+		$params = array(
+			'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
+			'cdnUrl'   => $this->get_api_client()->get_cdn_url(),
+			'theme'     => $this->get_option( 'button_theme', 'blue' ),
+			'rounded'   => 'yes' === $this->get_option( 'button_rounded', 'yes' ) ? 'true' : 'false',
+			'askPhone'  => 'yes' === $this->get_option( 'ask_phone', 'yes' ),
+			'i18n'      => array(
+				'loadFailed'   => __( 'The Yappy button could not be loaded. Please refresh the page and try again.', 'woocommerce-yappy' ),
+				'genericError' => __( 'Something went wrong with Yappy. Please try again.', 'woocommerce-yappy' ),
+				'invalidPhone' => __( 'Enter a valid Panamanian mobile number, for example 61234567. Leave it empty to pay by QR code.', 'woocommerce-yappy' ),
+				'confirming'   => __( 'Confirming your payment with Yappy…', 'woocommerce-yappy' ),
+				'rejected'     => __( 'Yappy payment rejected by the customer.', 'woocommerce-yappy' ),
+				'cancelled'    => __( 'Yappy payment cancelled by the customer.', 'woocommerce-yappy' ),
+				'expired'      => __( 'The Yappy payment request expired before it was confirmed.', 'woocommerce-yappy' ),
+			),
+		);
+
+		wp_add_inline_script(
+			'wc-yappy-inline-checkout',
+			'window.wcYappyInlineParams = ' . wp_json_encode( $params ) . ';',
+			'before'
+		);
+	}
+
+	/**
 	 * Explain on the thank-you page that confirmation may still be in flight.
 	 *
 	 * @param int $order_id WooCommerce order ID.
@@ -560,6 +711,10 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 		$result = $this->get_api_client()->init_checkout( $args );
 
 		$this->remember_reference( $order, $reference );
+		// The previous attempt may have ended as cancelled, rejected or expired.
+		// Once a fresh request exists, its IPN is the only status relevant to the
+		// checkout poller.
+		$order->delete_meta_data( self::META_LAST_STATUS );
 		$order->update_meta_data( self::META_TRANSACTION_ID, $result['transactionId'] );
 		$order->add_order_note(
 			sprintf(

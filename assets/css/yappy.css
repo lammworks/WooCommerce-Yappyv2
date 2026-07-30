@@ -59,3 +59,112 @@
 .wc-yappy [hidden] {
 	display: none !important;
 }
+
+/* The inline view lives inside WooCommerce's payment-method panel. */
+.wc-yappy--inline .wc-yappy__button {
+	margin-bottom: 0;
+}
+
+/*
+ * Yappy confirms the payment in its mobile app and tells the store through the
+ * IPN. Render it above theme elements instead of using Yappy's built-in
+ * backdrop, whose own modal and timer compete with the checkout state.
+ */
+.wc-yappy__waiting {
+	align-items: center;
+	background: rgba( 17, 34, 58, 0.15 );
+	box-sizing: border-box;
+	display: grid;
+	inset: 0;
+	justify-items: center;
+	padding: 1.25rem;
+	position: fixed;
+	z-index: 2147483000;
+}
+
+.wc-yappy__waiting-card {
+	align-items: center;
+	background: #fff;
+	border-radius: 0.75rem;
+	box-shadow: 0 0.75rem 2rem rgba( 0, 0, 0, 0.2 );
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	column-gap: 0.75rem;
+	max-width: 32rem;
+	padding: 1rem 1.125rem;
+	position: relative;
+	width: min( 100%, 32rem );
+}
+
+.wc-yappy__spinner {
+	animation: wc-yappy-spin 0.85s linear infinite;
+	border: 0.2rem solid rgba( 0, 78, 145, 0.2 );
+	border-radius: 50%;
+	border-top-color: #004e91;
+	grid-row: 1 / span 3;
+	height: 1.75rem;
+	width: 1.75rem;
+}
+
+.wc-yappy__waiting-title,
+.wc-yappy__waiting-message {
+	margin: 0;
+}
+
+.wc-yappy__waiting-title {
+	font-weight: 700;
+}
+
+.wc-yappy__waiting-message {
+	font-size: 0.875rem;
+	margin-top: 0.2rem;
+	opacity: 0.8;
+}
+
+.wc-yappy__waiting-time {
+	font-size: 1.125rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	grid-column: 2;
+	margin-top: 0.45rem;
+}
+
+.wc-yappy__waiting-close {
+	appearance: none;
+	background: #fff;
+	border: 1px solid #94a3b8;
+	border-radius: 999px;
+	color: #111827;
+	cursor: pointer;
+	font-size: 1.65rem;
+	font-weight: 700;
+	grid-column: 3;
+	grid-row: 1;
+	height: 2rem;
+	line-height: 1;
+	padding: 0 0 0.12rem;
+	width: 2rem;
+}
+
+.wc-yappy__waiting-close:focus-visible {
+	border-radius: 0.25rem;
+	outline: 3px solid #004e91;
+	outline-offset: 3px;
+}
+
+.wc-yappy__waiting-close:hover {
+	background: #f1f5f9;
+	border-color: #475569;
+}
+
+@keyframes wc-yappy-spin {
+	to {
+		transform: rotate( 360deg );
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wc-yappy__spinner {
+		animation: none;
+	}
+}

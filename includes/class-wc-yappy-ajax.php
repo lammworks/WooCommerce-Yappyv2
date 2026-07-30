@@ -154,9 +154,13 @@ class WC_Yappy_Ajax {
 
 		wp_send_json_success(
 			array(
-				'paid'      => ! $order->needs_payment(),
-				'status'    => $order->get_status(),
-				'returnUrl' => $order->get_checkout_order_received_url(),
+				// A cancelled or failed order still needs payment, but neither state
+				// means that Yappy collected money. Do not send the customer to a
+				// receipt until WooCommerce considers the order paid.
+				'paid'        => $order->is_paid(),
+				'status'      => $order->get_status(),
+				'yappyStatus' => (string) $order->get_meta( WC_Yappy_Gateway::META_LAST_STATUS ),
+				'returnUrl'   => $order->get_checkout_order_received_url(),
 			)
 		);
 	}
