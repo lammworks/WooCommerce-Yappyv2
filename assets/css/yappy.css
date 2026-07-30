@@ -131,20 +131,30 @@
 
 .wc-yappy__waiting-close {
 	appearance: none;
-	background: transparent;
-	border: 0;
+	background: #fff;
+	border: 1px solid #94a3b8;
+	border-radius: 999px;
+	color: #111827;
 	cursor: pointer;
-	font-size: 1.5rem;
+	font-size: 1.65rem;
+	font-weight: 700;
 	grid-column: 3;
 	grid-row: 1;
+	height: 2rem;
 	line-height: 1;
-	padding: 0;
+	padding: 0 0 0.12rem;
+	width: 2rem;
 }
 
 .wc-yappy__waiting-close:focus-visible {
 	border-radius: 0.25rem;
 	outline: 3px solid #004e91;
 	outline-offset: 3px;
+}
+
+.wc-yappy__waiting-close:hover {
+	background: #f1f5f9;
+	border-color: #475569;
 }
 
 @keyframes wc-yappy-spin {

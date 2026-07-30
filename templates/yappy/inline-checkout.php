@@ -3,7 +3,7 @@
  * Yappy payment method fields for the classic WooCommerce checkout.
  *
  * @package WooCommerce_Yappy
- * @version 1.2.2
+ * @version 1.2.3
  *
  * @var string $description Gateway description.
  * @var bool   $ask_phone   Whether to render the phone field.
