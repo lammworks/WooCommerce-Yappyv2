@@ -343,6 +343,31 @@
 		$( 'form.checkout' ).trigger( 'submit' );
 	}
 
+	function handleCheckoutSuccess( _event, result ) {
+		if ( ! busy || ! result || ! result.yappy || ! activeButton ) {
+			return;
+		}
+
+		payment = result.yappy;
+		// WooCommerce's checkout.js fires this event with triggerHandler() on
+		// form.checkout, so it does not bubble to document.body. Start the
+		// customer-facing state before handing credentials to the Yappy component:
+		// this keeps the checkout responsive even if the component takes a moment
+		// to switch from its own spinner to the mobile-app request.
+		beginPaymentWait();
+		activeButton.eventPayment( {
+			transactionId: payment.transactionId,
+			token: payment.token,
+			documentName: payment.documentName,
+		} );
+	}
+
+	function bindCheckoutSuccess() {
+		$( 'form.checkout' )
+			.off( 'checkout_place_order_success.wcYappyInline' )
+			.on( 'checkout_place_order_success.wcYappyInline', handleCheckoutSuccess );
+	}
+
 	function mountButton() {
 		var root = getRoot();
 		var container = getContainer();
@@ -404,6 +429,8 @@
 	}
 
 	$( document.body ).on( 'updated_checkout payment_method_selected', function () {
+		bindCheckoutSuccess();
+
 		if ( isYappySelected() ) {
 			mountButton();
 			if ( activeButton ) {
@@ -423,24 +450,9 @@
 		hideWaiting();
 	} );
 
-	$( document.body ).on( 'checkout_place_order_success', function ( _event, result ) {
-		if ( ! busy || ! result || ! result.yappy || ! activeButton ) {
-			return;
-		}
-
-		payment = result.yappy;
-		// The server returns the in-page #wc-yappy-inline fragment. WooCommerce
-		// always follows successful redirects, and an empty value reloads the
-		// checkout before Yappy can receive these credentials.
-		activeButton.eventPayment( {
-			transactionId: payment.transactionId,
-			token: payment.token,
-			documentName: payment.documentName,
-		} );
-		beginPaymentWait();
-	} );
-
 	$( function () {
+		bindCheckoutSuccess();
+
 		if ( isYappySelected() ) {
 			mountButton();
 		}
