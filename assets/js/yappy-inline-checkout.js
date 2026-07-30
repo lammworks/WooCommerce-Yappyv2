@@ -296,9 +296,9 @@
 		}
 
 		payment = result.yappy;
-		// WooCommerce checks this value after emitting the event. Clearing it
-		// keeps this checkout view in place while Yappy takes over.
-		result.redirect = '';
+		// The server returns the in-page #wc-yappy-inline fragment. WooCommerce
+		// always follows successful redirects, and an empty value reloads the
+		// checkout before Yappy can receive these credentials.
 		activeButton.eventPayment( {
 			transactionId: payment.transactionId,
 			token: payment.token,

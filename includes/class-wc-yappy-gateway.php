@@ -461,7 +461,10 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 			// merchant secret is ever exposed to the browser.
 			return array(
 				'result'   => 'success',
-				'redirect' => '',
+				// WooCommerce always follows a successful redirect. A same-document
+				// fragment prevents an empty redirect from reloading checkout while
+				// keeping its response contract intact for the inline JavaScript.
+				'redirect' => '#wc-yappy-inline',
 				'yappy'    => array_merge(
 					$result,
 					array(
