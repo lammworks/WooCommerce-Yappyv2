@@ -48,7 +48,22 @@ class WC_Yappy_IPN_Handler {
 		// rewriting (URL normalisation in particular) would break verification.
 		// Nonce verification does not apply to a server-to-server callback.
 		// phpcs:disable WordPress.Security.NonceVerification
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+
+		// Yappy delivers the result as a GET request. POST and a JSON body are
+		// read as well, so a reverse proxy that forwards the callback as a POST,
+		// or a JSON-style delivery, cannot silently drop it. The HMAC still covers
+		// the same values whichever way they arrive.
 		$source = ! empty( $_GET ) ? $_GET : $_POST;
+
+		if ( empty( $source ) ) {
+			$raw     = file_get_contents( 'php://input' );
+			$decoded = json_decode( (string) $raw, true );
+			if ( is_array( $decoded ) ) {
+				$source = $decoded;
+			}
+		}
+
 		$params = array();
 		foreach ( array( 'orderId', 'status', 'domain', 'hash', 'confirmationNumber' ) as $field ) {
 			// A caller can send `?orderId[]=x`; anything that is not a scalar is
@@ -62,15 +77,35 @@ class WC_Yappy_IPN_Handler {
 		$log->debug(
 			'IPN received.',
 			array(
-				'orderId' => sanitize_text_field( $params['orderId'] ),
-				'status'  => sanitize_text_field( $params['status'] ),
+				'method'             => $method,
+				'orderId'            => sanitize_text_field( $params['orderId'] ),
+				'status'             => sanitize_text_field( $params['status'] ),
+				'domain'             => sanitize_text_field( $params['domain'] ),
+				'hasHash'            => '' !== $params['hash'],
+				'confirmationNumber' => sanitize_text_field( $params['confirmationNumber'] ),
 			)
 		);
 
 		if ( ! WC_Yappy_Signature::verify( $params, $gateway->get_secret_key() ) ) {
+			$secret = $gateway->get_secret_key();
 			$log->error(
 				'IPN rejected: signature mismatch.',
 				array( 'orderId' => sanitize_text_field( $params['orderId'] ) )
+			);
+			// Debug-only detail to tell the three failure modes apart: an empty
+			// payload (nothing was parsed), a missing secret key (keyConfigured is
+			// false), or a genuine hash/algorithm mismatch (the signed string and
+			// key look right but the digests differ). The signed values and the
+			// provided hash already travel in the request, so nothing secret is
+			// added to the log here.
+			$log->debug(
+				'IPN signature detail.',
+				array(
+					'signed'        => $params['orderId'] . $params['status'] . $params['domain'],
+					'provided'      => $params['hash'],
+					'expected'      => WC_Yappy_Signature::calculate( $params['orderId'], $params['status'], $params['domain'], $secret ),
+					'keyConfigured' => '' !== $secret,
+				)
 			);
 			self::respond( 400, 'Invalid hash' );
 		}
