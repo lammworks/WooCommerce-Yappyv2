@@ -621,6 +621,9 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 				'genericError' => __( 'Something went wrong with Yappy. Please try again.', 'woocommerce-yappy' ),
 				'invalidPhone' => __( 'Enter a valid Panamanian mobile number, for example 61234567. Leave it empty to pay by QR code.', 'woocommerce-yappy' ),
 				'confirming'   => __( 'Confirming your payment with Yappy…', 'woocommerce-yappy' ),
+				'rejected'     => __( 'Yappy payment rejected by the customer.', 'woocommerce-yappy' ),
+				'cancelled'    => __( 'Yappy payment cancelled by the customer.', 'woocommerce-yappy' ),
+				'expired'      => __( 'The Yappy payment request expired before it was confirmed.', 'woocommerce-yappy' ),
 			),
 		);
 
@@ -708,6 +711,10 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 		$result = $this->get_api_client()->init_checkout( $args );
 
 		$this->remember_reference( $order, $reference );
+		// The previous attempt may have ended as cancelled, rejected or expired.
+		// Once a fresh request exists, its IPN is the only status relevant to the
+		// checkout poller.
+		$order->delete_meta_data( self::META_LAST_STATUS );
 		$order->update_meta_data( self::META_TRANSACTION_ID, $result['transactionId'] );
 		$order->add_order_note(
 			sprintf(

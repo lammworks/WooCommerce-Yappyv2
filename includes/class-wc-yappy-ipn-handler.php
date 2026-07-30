@@ -118,10 +118,14 @@ class WC_Yappy_IPN_Handler {
 	 * @return void
 	 */
 	protected static function apply_status( $gateway, $order, array $params ) {
-		$log    = $gateway->get_logger();
-		$status = $params['status'];
+		$log                = $gateway->get_logger();
+		$status             = $params['status'];
+		$current_reference  = (string) $order->get_meta( WC_Yappy_Gateway::META_REFERENCE );
+		$is_current_attempt = '' !== $current_reference && hash_equals( $current_reference, (string) $params['orderId'] );
 
-		$order->update_meta_data( WC_Yappy_Gateway::META_LAST_STATUS, $status );
+		if ( $is_current_attempt || WC_Yappy_Status::EXECUTED === $status ) {
+			$order->update_meta_data( WC_Yappy_Gateway::META_LAST_STATUS, $status );
+		}
 
 		if ( '' !== $params['confirmationNumber'] ) {
 			$order->update_meta_data( WC_Yappy_Gateway::META_CONFIRMATION, $params['confirmationNumber'] );
@@ -138,6 +142,22 @@ class WC_Yappy_IPN_Handler {
 			);
 			$order->save();
 			$log->info( 'IPN ignored: order already paid.', array( 'order' => $order->get_id() ) );
+			return;
+		}
+
+		// An earlier request can resolve after the customer has started a fresh
+		// one. A late rejection, cancellation or expiry must not cancel the newer
+		// attempt. A late successful payment is still accepted below.
+		if ( ! $is_current_attempt && WC_Yappy_Status::EXECUTED !== $status ) {
+			$order->add_order_note(
+				sprintf(
+					/* translators: %s: Yappy status label. */
+					__( 'Ignored a late Yappy notification (%s) because a newer payment attempt is active.', 'woocommerce-yappy' ),
+					WC_Yappy_Status::label( $status )
+				)
+			);
+			$order->save();
+			$log->info( 'IPN ignored: newer payment attempt is active.', array( 'order' => $order->get_id() ) );
 			return;
 		}
 
@@ -171,7 +191,10 @@ class WC_Yappy_IPN_Handler {
 				break;
 
 			case WC_Yappy_Status::CANCELLED:
-				$order->update_status( 'cancelled', __( 'Yappy payment cancelled by the customer.', 'woocommerce-yappy' ) );
+				// Cancelling the Yappy request does not cancel the customer's shop
+				// order. A failed order remains payable, so the checkout can offer a
+				// safe retry with a fresh Yappy reference.
+				$order->update_status( 'failed', __( 'Yappy payment cancelled by the customer.', 'woocommerce-yappy' ) );
 				$log->info( 'IPN accepted: payment cancelled.', array( 'order' => $order->get_id() ) );
 				break;
 

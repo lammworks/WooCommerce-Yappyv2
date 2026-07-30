@@ -36,6 +36,10 @@ After Yappy accepts the transaction request, checkout stays visible with a small
 panel that tells the customer to finish in the Yappy app. The receipt page is only shown after the
 signed IPN confirms that payment was completed.
 
+The checkout panel counts down the five-minute Yappy request window and polls the store for its
+signed IPN result. Rejected, cancelled and expired requests remain payable WooCommerce orders, so
+the customer can submit a fresh Yappy request without recreating the checkout order.
+
 ## Requirements
 
 | | |

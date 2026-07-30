@@ -3,7 +3,7 @@
  * Yappy payment method fields for the classic WooCommerce checkout.
  *
  * @package WooCommerce_Yappy
- * @version 1.1.0
+ * @version 1.2.0
  *
  * @var string $description Gateway description.
  * @var bool   $ask_phone   Whether to render the phone field.
@@ -46,9 +46,11 @@ defined( 'ABSPATH' ) || exit;
 
 	<div class="wc-yappy__waiting" id="wc-yappy-inline-waiting" role="status" aria-live="polite" hidden>
 		<div class="wc-yappy__waiting-card">
+			<button class="wc-yappy__waiting-close" id="wc-yappy-inline-waiting-close" type="button" aria-label="Close">&times;</button>
 			<span class="wc-yappy__spinner" aria-hidden="true"></span>
 			<p class="wc-yappy__waiting-title" id="wc-yappy-inline-waiting-title"></p>
 			<p class="wc-yappy__waiting-message" id="wc-yappy-inline-waiting-message"></p>
+			<time class="wc-yappy__waiting-time" id="wc-yappy-inline-waiting-time" datetime="PT5M">5:00</time>
 		</div>
 	</div>
 

@@ -19,6 +19,13 @@
 	var payment;
 	var busy = false;
 	var DEFINE_TIMEOUT = 15000;
+	var PAYMENT_TIMEOUT_SECONDS = 300;
+	var STATUS_POLL_INTERVAL = 2000;
+	var countdownTimer;
+	var statusPollTimer;
+	var expiresAt = 0;
+	var waitingForPayment = false;
+	var retryReady = false;
 
 	function getRoot() {
 		return document.getElementById( 'wc-yappy-inline' );
@@ -92,6 +99,39 @@
 		}
 	}
 
+	function updateCountdown() {
+		var time = document.getElementById( 'wc-yappy-inline-waiting-time' );
+		var seconds = Math.max( 0, Math.ceil( ( expiresAt - Date.now() ) / 1000 ) );
+		var minutes = Math.floor( seconds / 60 );
+		var remaining = String( seconds % 60 ).padStart( 2, '0' );
+
+		if ( time ) {
+			time.textContent = String( minutes ) + ':' + remaining;
+			time.dateTime = 'PT' + seconds + 'S';
+		}
+
+		if ( seconds === 0 && countdownTimer ) {
+			window.clearInterval( countdownTimer );
+			countdownTimer = null;
+			var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
+			if ( title ) {
+				title.textContent = i18n.expired || i18n.confirming;
+			}
+		}
+	}
+
+	function stopPaymentTimers() {
+		if ( countdownTimer ) {
+			window.clearInterval( countdownTimer );
+			countdownTimer = null;
+		}
+
+		if ( statusPollTimer ) {
+			window.clearTimeout( statusPollTimer );
+			statusPollTimer = null;
+		}
+	}
+
 	function normalizePhone( value ) {
 		var digits = String( value || '' ).replace( /\D/g, '' );
 
@@ -111,6 +151,8 @@
 	function resetCheckoutAttempt() {
 		busy = false;
 		setLoading( false );
+		waitingForPayment = false;
+		stopPaymentTimers();
 		hideWaiting();
 		var marker = getRequestMarker();
 		if ( marker ) {
@@ -154,12 +196,16 @@
 		return componentPromise;
 	}
 
-	function postStatus() {
+	function postPayment( action, extra ) {
 		var body = new URLSearchParams();
-		body.append( 'action', 'wc_yappy_order_status' );
+		body.append( 'action', action );
 		body.append( 'order_id', payment.orderId );
 		body.append( 'order_key', payment.orderKey );
 		body.append( 'nonce', payment.nonce );
+
+		Object.keys( extra || {} ).forEach( function ( key ) {
+			body.append( key, extra[ key ] );
+		} );
 
 		return fetch( params.ajaxUrl, {
 			method: 'POST',
@@ -174,38 +220,111 @@
 			} )
 			.then( function ( response ) {
 				if ( ! response.success ) {
-					throw new Error( 'status' );
+					var error = new Error( response.data && response.data.message ? response.data.message : 'request' );
+					error.data = response.data || {};
+					throw error;
 				}
 				return response.data;
 			} );
 	}
 
-	function pollUntilPaid( attemptsLeft ) {
-		setStatus( i18n.confirming );
-		showWaiting();
+	function terminalMessage( status ) {
+		if ( status === 'C' ) {
+			return i18n.cancelled || i18n.genericError;
+		}
+		if ( status === 'R' ) {
+			return i18n.rejected || i18n.genericError;
+		}
+		return i18n.expired || i18n.genericError;
+	}
 
-		postStatus()
+	function finishPaymentAttempt( status ) {
+		waitingForPayment = false;
+		busy = false;
+		retryReady = true;
+		stopPaymentTimers();
+		setLoading( false );
+		setStatus( '' );
+		hideWaiting();
+		showError( terminalMessage( status ) );
+	}
+
+	function pollPaymentStatus() {
+		if ( ! waitingForPayment || ! payment ) {
+			return;
+		}
+
+		postPayment( 'wc_yappy_order_status' )
 			.then( function ( result ) {
 				if ( result.paid ) {
+					stopPaymentTimers();
 					window.location.href = result.returnUrl || payment.returnUrl;
 					return;
 				}
 
-				if ( attemptsLeft <= 0 ) {
-					window.location.href = payment.returnUrl;
+				if ( result.yappyStatus === 'C' || result.yappyStatus === 'R' || result.yappyStatus === 'X' ) {
+					finishPaymentAttempt( result.yappyStatus );
 					return;
 				}
 
-				window.setTimeout( function () {
-					pollUntilPaid( attemptsLeft - 1 );
-				}, 2000 );
+				statusPollTimer = window.setTimeout( pollPaymentStatus, STATUS_POLL_INTERVAL );
 			} )
 			.catch( function () {
-				window.location.href = payment.returnUrl;
+				// Keep the customer on checkout. A short temporary network error must
+				// never be mistaken for a payment result.
+				statusPollTimer = window.setTimeout( pollPaymentStatus, STATUS_POLL_INTERVAL );
+			} );
+	}
+
+	function beginPaymentWait() {
+		waitingForPayment = true;
+		retryReady = false;
+		expiresAt = Date.now() + ( PAYMENT_TIMEOUT_SECONDS * 1000 );
+		stopPaymentTimers();
+		showWaiting();
+		updateCountdown();
+		countdownTimer = window.setInterval( updateCountdown, 250 );
+		pollPaymentStatus();
+	}
+
+	function retryPayment() {
+		var phoneField = document.getElementById( 'wc-yappy-phone' );
+		var phone = phoneField ? phoneField.value.trim() : '';
+
+		if ( params.askPhone && phone !== '' && normalizePhone( phone ) === '' ) {
+			showError( i18n.invalidPhone );
+			return;
+		}
+
+		busy = true;
+		clearError();
+		setLoading( true );
+
+		postPayment( 'wc_yappy_create_order', { phone: phone } )
+			.then( function ( result ) {
+				payment.transactionId = result.transactionId;
+				payment.token = result.token;
+				payment.documentName = result.documentName;
+				activeButton.eventPayment( result );
+				beginPaymentWait();
+			} )
+			.catch( function ( error ) {
+				busy = false;
+				setLoading( false );
+				showError( error.message );
 			} );
 	}
 
 	function submitCheckoutFromYappy() {
+		if ( retryReady ) {
+			retryPayment();
+			return;
+		}
+
+		if ( payment ) {
+			return;
+		}
+
 		var phoneField = document.getElementById( 'wc-yappy-phone' );
 		if ( params.askPhone && phoneField && phoneField.value.trim() !== '' && normalizePhone( phoneField.value ) === '' ) {
 			showError( i18n.invalidPhone );
@@ -253,13 +372,20 @@
 				button.addEventListener( 'eventClick', submitCheckoutFromYappy );
 
 				button.addEventListener( 'eventSuccess', function () {
-					busy = false;
-					setLoading( false );
-					clearError();
-					pollUntilPaid( 10 );
+					setStatus( i18n.confirming );
+					if ( ! waitingForPayment ) {
+						beginPaymentWait();
+					}
 				} );
 
 				button.addEventListener( 'eventError', function ( event ) {
+					if ( waitingForPayment ) {
+						// Yappy may emit this before its IPN reaches the store. Keep
+						// polling so the customer receives the final C/R/X state.
+						setLoading( false );
+						return;
+					}
+
 					resetCheckoutAttempt();
 					setStatus( '' );
 					showError( event && event.detail && event.detail.message ? event.detail.message : i18n.genericError );
@@ -290,6 +416,13 @@
 
 	$( document.body ).on( 'checkout_error', resetCheckoutAttempt );
 
+	$( document.body ).on( 'click', '#wc-yappy-inline-waiting-close', function () {
+		// The Yappy API does not provide a browser-side cancellation endpoint.
+		// Closing this card only dismisses the visual reminder; polling continues
+		// until Yappy sends its authoritative result through the IPN.
+		hideWaiting();
+	} );
+
 	$( document.body ).on( 'checkout_place_order_success', function ( _event, result ) {
 		if ( ! busy || ! result || ! result.yappy || ! activeButton ) {
 			return;
@@ -304,7 +437,7 @@
 			token: payment.token,
 			documentName: payment.documentName,
 		} );
-		showWaiting();
+		beginPaymentWait();
 	} );
 
 	$( function () {

@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.2
+Stable tag: 1.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,10 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.2.0 =
+* Add a five-minute Yappy payment countdown directly in checkout.
+* Detect rejected, cancelled and expired Yappy IPNs without treating them as a successful payment, then allow a fresh Yappy request on the same order.
 
 = 1.1.2 =
 * Prevent the inline checkout from reloading after Yappy is started.
