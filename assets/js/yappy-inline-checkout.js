@@ -179,29 +179,6 @@
 		}
 	}
 
-	function resetComponentUi() {
-		if ( ! activeButton ) {
-			return;
-		}
-
-		// The Yappy component renders its backdrop and dialog inside its custom
-		// element. Remove either one defensively when the shopper dismisses our
-		// reminder, then clear its public loading property.
-		activeButton.querySelectorAll( '.yappy-backdrop' ).forEach( function ( backdrop ) {
-			backdrop.classList.remove( 'yappy-backdrop' );
-		} );
-
-		activeButton.querySelectorAll( 'dialog[open]' ).forEach( function ( dialog ) {
-			if ( typeof dialog.close === 'function' ) {
-				dialog.close();
-			} else {
-				dialog.open = false;
-			}
-		} );
-
-		setLoading( false );
-	}
-
 	function resetCheckoutAttempt() {
 		busy = false;
 		setLoading( false );
@@ -510,7 +487,7 @@
 		// its authoritative result through the IPN. The outstanding request can
 		// still be cancelled from the Yappy app.
 		hideWaiting();
-		resetComponentUi();
+		setLoading( false );
 		$( 'form.checkout' ).removeClass( 'processing' );
 		if ( typeof $.fn.unblock === 'function' ) {
 			$( 'form.checkout' ).unblock();
