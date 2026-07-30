@@ -3,7 +3,7 @@
  * Plugin Name:       Yappy Payment Button for WooCommerce
  * Plugin URI:        https://github.com/lammworks/woocommerce-yappyv2
  * Description:       Accept payments with Yappy (Banco General, Panamá) in WooCommerce using the new Botón de Pago Yappy integration.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Lammworks
@@ -19,7 +19,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WC_YAPPY_VERSION', '1.0.0' );
+define( 'WC_YAPPY_VERSION', '1.1.0' );
 define( 'WC_YAPPY_PLUGIN_FILE', __FILE__ );
 define( 'WC_YAPPY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WC_YAPPY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

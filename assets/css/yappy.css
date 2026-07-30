@@ -59,3 +59,8 @@
 .wc-yappy [hidden] {
 	display: none !important;
 }
+
+/* The inline view lives inside WooCommerce's payment-method panel. */
+.wc-yappy--inline .wc-yappy__button {
+	margin-bottom: 0;
+}

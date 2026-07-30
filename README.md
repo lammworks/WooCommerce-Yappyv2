@@ -6,21 +6,17 @@ service from Banco General (Panamá), built on the **new** *Botón de Pago Yappy
 ## How it works
 
 ```
- checkout                 order-pay page                    Yappy
- ────────                 ─────────────                     ─────
- place order  ─────────►  <btn-yappy> rendered
-                          from the Yappy CDN
-                                │
-                          eventClick
-                                │
-                                ▼
-                          admin-ajax  ──►  POST /payments/validate/merchant
-                                           POST /payments/payment-wc
-                                │◄──  transactionId · token · documentName
-                                │
-                          eventPayment()  ────────────────►  app push / QR
-                                                                  │
- order marked paid  ◄────  IPN (HMAC verified)  ◄─────────────────┘
+ classic checkout                                                Yappy
+ ────────────────                                                ─────
+ <btn-yappy> rendered from the CDN
+        │ eventClick
+        ▼
+ WooCommerce creates pending order ──► POST /payments/validate/merchant
+                                      ──► POST /payments/payment-wc
+        │                                      │
+        └──── eventPayment(transactionId, token, documentName) ─► app push / QR
+                                                                     │
+ order marked paid  ◄──────────────────── IPN (HMAC verified) ◄────┘
 ```
 
 Two properties are deliberate:
@@ -30,6 +26,11 @@ Two properties are deliberate:
 * **The IPN is the only authority on payment.** `eventSuccess` in the browser just triggers
   a short poll of the store's own order status — a customer who closes the tab still gets
   their order marked paid.
+
+The classic (shortcode) checkout opens the official Yappy component inline. The separate
+WooCommerce order-pay page remains a fallback for direct payment links, browsers without the
+component, and the Checkout block (whose Store API response cannot safely carry the short-lived
+Yappy credentials into the classic component).
 
 ## Requirements
 

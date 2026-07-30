@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,7 +21,7 @@ The plugin implements the **new** Botón de Pago Yappy integration:
 * The official `<btn-yappy>` web component, loaded from the Yappy CDN.
 * The IPN callback, verified with HMAC-SHA256, as the single authority on whether an order was paid.
 
-Both the classic (shortcode) checkout and the WooCommerce Checkout block are supported, as is High-Performance Order Storage.
+The classic (shortcode) checkout launches the Yappy button inline, without a separate WooCommerce payment page. The WooCommerce Checkout block remains supported through the standard secure payment-page fallback. High-Performance Order Storage is supported.
 
 = What you need =
 
@@ -60,6 +60,10 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.1.0 =
+* Launch Yappy directly from the classic WooCommerce checkout, without sending customers through the order-pay page.
+* Keep the order-pay page as a safe fallback for checkout blocks, direct payment links and browsers without the Yappy component.
 
 = 1.0.0 =
 * First release: new Botón de Pago Yappy integration, block checkout support, HPOS support, signed IPN handling.

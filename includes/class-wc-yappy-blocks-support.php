@@ -3,10 +3,10 @@
  * Registers Yappy with the WooCommerce Checkout block.
  *
  * The block-based checkout does not read the classic gateway definition, so the
- * method has to be declared again for the React front end. Because Yappy is paid
- * on a page of its own after the order is placed, the block integration only has
- * to render the method's label and description — the redirect returned by
- * `process_payment()` does the rest.
+ * method has to be declared again for the React front end. The classic checkout
+ * starts Yappy inline, while the Checkout block deliberately keeps the secure
+ * order-pay fallback because the Store API cannot hand its short-lived Yappy
+ * credentials to the classic component.
  *
  * @package WooCommerce_Yappy
  */
