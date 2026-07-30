@@ -38,6 +38,15 @@ class WC_Yappy_IPN_Handler {
 		$gateway = wc_yappy_get_gateway();
 
 		if ( ! $gateway ) {
+			// Record the hit even though the gateway is missing: this is always
+			// logged, so a reachability test (or a real notification) proves the
+			// request got as far as PHP even when nothing else could run.
+			if ( function_exists( 'wc_get_logger' ) ) {
+				wc_get_logger()->error(
+					'IPN endpoint reached but the Yappy gateway is unavailable.',
+					array( 'source' => 'yappy' )
+				);
+			}
 			self::respond( 503, 'Gateway unavailable' );
 		}
 

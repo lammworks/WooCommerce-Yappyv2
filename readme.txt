@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.9
+Stable tag: 1.2.10
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.2.10 =
+* Log the IPN endpoint being reached even when the gateway is momentarily unavailable, so a reachability test proves whether Yappy's notification actually arrives at the store.
 
 = 1.2.9 =
 * Accept the IPN as a POST or JSON body in addition to the documented GET, so a reverse proxy or a POST-style delivery cannot silently drop a payment notification.
