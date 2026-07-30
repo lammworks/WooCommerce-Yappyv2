@@ -298,6 +298,27 @@
 		showError( terminalMessage( status ) );
 	}
 
+	// The customer closed the waiting card. There is no browser-side cancel in the
+	// Yappy API, but the intent is clear — abandon this attempt, most often to
+	// correct a mistyped phone number. End the wait completely and arm a fresh
+	// request so the next press on the Yappy button starts over instead of finding
+	// a disabled button. Any payment still completed in the Yappy app is recorded
+	// server-side through the IPN regardless.
+	function dismissPaymentAttempt() {
+		waitingForPayment = false;
+		busy = false;
+		// An order already exists for this checkout, so the next press should
+		// create a fresh Yappy request against it rather than re-submitting the
+		// whole checkout. Without an order yet, fall back to the initial flow.
+		retryReady = !! payment;
+		stopPaymentTimers();
+		setLoading( false );
+		setStatus( '' );
+		clearError();
+		hideWaiting();
+		unblockCheckoutForm();
+	}
+
 	function pollPaymentStatus() {
 		if ( ! waitingForPayment || ! payment ) {
 			return;
@@ -341,6 +362,11 @@
 	}
 
 	function retryPayment() {
+		// Guard against a second press while the fresh request is still in flight.
+		if ( busy ) {
+			return;
+		}
+
 		var phoneField = document.getElementById( 'wc-yappy-phone' );
 		var phone = phoneField ? phoneField.value.trim() : '';
 
@@ -461,6 +487,13 @@
 				button.addEventListener( 'eventClick', submitCheckoutFromYappy );
 
 				button.addEventListener( 'eventSuccess', function () {
+					// Only react while an attempt is actually live. Once the customer
+					// has dismissed the card or a terminal result has arrived, a late
+					// success signal from the component must not reopen the dialog or
+					// restart polling on its own.
+					if ( ! busy && ! waitingForPayment ) {
+						return;
+					}
 					setStatus( i18n.confirming );
 					if ( ! waitingForPayment ) {
 						beginPaymentWait();
@@ -507,15 +540,7 @@
 
 	$( document.body ).on( 'checkout_error', resetCheckoutAttempt );
 
-	$( document.body ).on( 'click', '#wc-yappy-inline-waiting-close', function () {
-		// The Yappy API does not provide a browser-side cancellation endpoint.
-		// This returns the shopper to checkout and keeps polling until Yappy sends
-		// its authoritative result through the IPN. The outstanding request can
-		// still be cancelled from the Yappy app.
-		hideWaiting();
-		setLoading( false );
-		unblockCheckoutForm();
-	} );
+	$( document.body ).on( 'click', '#wc-yappy-inline-waiting-close', dismissPaymentAttempt );
 
 	$( function () {
 		bindCheckoutSuccess();
