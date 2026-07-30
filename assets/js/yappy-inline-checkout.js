@@ -77,6 +77,7 @@
 		var waiting = document.getElementById( 'wc-yappy-inline-waiting' );
 		var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
 		var message = document.getElementById( 'wc-yappy-inline-waiting-message' );
+		var time = document.getElementById( 'wc-yappy-inline-waiting-time' );
 		var description = getRoot() && getRoot().querySelector( '.wc-yappy__description, .wc-yappy__hint' );
 
 		if ( title ) {
@@ -87,7 +88,37 @@
 			message.textContent = description ? description.textContent.trim() : '';
 		}
 
+		if ( time ) {
+			time.hidden = false;
+		}
+
 		if ( waiting ) {
+			waiting.classList.remove( 'is-preparing' );
+			waiting.hidden = false;
+		}
+	}
+
+	function showPreparing() {
+		var waiting = document.getElementById( 'wc-yappy-inline-waiting' );
+		var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
+		var message = document.getElementById( 'wc-yappy-inline-waiting-message' );
+		var time = document.getElementById( 'wc-yappy-inline-waiting-time' );
+		var description = getRoot() && getRoot().querySelector( '.wc-yappy__description, .wc-yappy__hint' );
+
+		if ( title ) {
+			title.textContent = i18n.confirming || 'Confirming your payment with Yappy…';
+		}
+
+		if ( message ) {
+			message.textContent = description ? description.textContent.trim() : '';
+		}
+
+		if ( time ) {
+			time.hidden = true;
+		}
+
+		if ( waiting ) {
+			waiting.classList.add( 'is-preparing' );
 			waiting.hidden = false;
 		}
 	}
@@ -340,6 +371,9 @@
 		busy = true;
 		marker.value = '1';
 		setLoading( true );
+		// Show feedback before WordPress starts its checkout request. This keeps
+		// slower hosts from leaving the customer with only a spinning button.
+		showPreparing();
 		$( 'form.checkout' ).trigger( 'submit' );
 	}
 
@@ -384,6 +418,10 @@
 				var button = document.createElement( 'btn-yappy' );
 				button.setAttribute( 'theme', params.theme || 'blue' );
 				button.setAttribute( 'rounded', params.rounded || 'true' );
+				// The official component's built-in dialog renders an opaque backdrop and
+				// an independent countdown. Keep it off so this plugin owns one accessible
+				// waiting card, timer and close control across all WordPress themes.
+				button.triggerModal = false;
 
 				button.addEventListener( 'isYappyOnline', function ( event ) {
 					var online = ! event || typeof event.detail === 'undefined' || !! event.detail;

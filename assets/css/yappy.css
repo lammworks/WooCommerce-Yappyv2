@@ -67,13 +67,19 @@
 
 /*
  * Yappy confirms the payment in its mobile app and tells the store through the
- * IPN. Keep that in-progress state visible without obscuring Yappy's own QR or
- * transaction modal when it is being used on a desktop browser.
+ * IPN. Render it above theme elements instead of using Yappy's built-in
+ * backdrop, whose own modal and timer compete with the checkout state.
  */
 .wc-yappy__waiting {
-	margin-top: 1.25rem;
-	max-width: 32rem;
-	width: 100%;
+	align-items: center;
+	background: rgba( 17, 34, 58, 0.15 );
+	box-sizing: border-box;
+	display: grid;
+	inset: 0;
+	justify-items: center;
+	padding: 1.25rem;
+	position: fixed;
+	z-index: 2147483000;
 }
 
 .wc-yappy__waiting-card {
@@ -84,7 +90,10 @@
 	display: grid;
 	grid-template-columns: auto 1fr auto;
 	column-gap: 0.75rem;
+	max-width: 32rem;
 	padding: 1rem 1.125rem;
+	position: relative;
+	width: min( 100%, 32rem );
 }
 
 .wc-yappy__spinner {
@@ -130,6 +139,12 @@
 	grid-row: 1;
 	line-height: 1;
 	padding: 0;
+}
+
+.wc-yappy__waiting-close:focus-visible {
+	border-radius: 0.25rem;
+	outline: 3px solid #004e91;
+	outline-offset: 3px;
 }
 
 @keyframes wc-yappy-spin {

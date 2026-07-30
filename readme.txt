@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,10 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.2.2 =
+* Show the Yappy waiting card immediately while WooCommerce creates the request, including a spinner for slower hosts.
+* Use the plugin's accessible waiting card, close control and five-minute timer instead of the competing Yappy component modal.
 
 = 1.2.1 =
 * Fix the inline checkout handoff so the Yappy waiting card and countdown begin after WooCommerce creates the order.
