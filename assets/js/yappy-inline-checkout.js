@@ -288,18 +288,25 @@
 		return i18n.expired || i18n.genericError;
 	}
 
-	function finishPaymentAttempt( status ) {
+	// End the current attempt and return the checkout to a state the customer can
+	// act on: stop the timers, take down the waiting card, release WooCommerce's
+	// overlay, and mount a fresh Yappy button (the old one cannot be re-enabled
+	// once pressed). `message`, when given, is shown as the reason it ended.
+	function concludeAttempt( message ) {
 		waitingForPayment = false;
 		busy = false;
-		retryReady = true;
 		stopPaymentTimers();
-		setLoading( false );
 		setStatus( '' );
 		hideWaiting();
-		// The waiting card was the only thing on top of WooCommerce's overlay;
-		// hiding it must not leave the retry button trapped behind that overlay.
 		unblockCheckoutForm();
-		showError( terminalMessage( status ) );
+		remountYappyButton();
+		if ( message ) {
+			showError( message );
+		}
+	}
+
+	function finishPaymentAttempt( status ) {
+		concludeAttempt( terminalMessage( status ) );
 	}
 
 	// The official <btn-yappy> component disables its own button once it has been
@@ -326,14 +333,8 @@
 	// new request can be started. Any payment still completed in the Yappy app is
 	// recorded server-side through the IPN regardless.
 	function dismissPaymentAttempt() {
-		waitingForPayment = false;
-		busy = false;
-		stopPaymentTimers();
-		setStatus( '' );
 		clearError();
-		hideWaiting();
-		unblockCheckoutForm();
-		remountYappyButton();
+		concludeAttempt();
 	}
 
 	function pollPaymentStatus() {
@@ -518,16 +519,20 @@
 				} );
 
 				button.addEventListener( 'eventError', function ( event ) {
+					var detail = event && event.detail && event.detail.message ? event.detail.message : '';
+
 					if ( waitingForPayment ) {
-						// Yappy may emit this before its IPN reaches the store. Keep
-						// polling so the customer receives the final C/R/X state.
-						setLoading( false );
+						// The Yappy app reported the request ended — most often the
+						// customer cancelled it there. The component learns this before
+						// the store's IPN does, so end the attempt now rather than
+						// leaving the waiting card counting down over a live button.
+						concludeAttempt( detail || i18n.cancelled || i18n.genericError );
 						return;
 					}
 
 					resetCheckoutAttempt();
 					setStatus( '' );
-					showError( event && event.detail && event.detail.message ? event.detail.message : i18n.genericError );
+					showError( detail || i18n.genericError );
 				} );
 
 				activeButton = button;
