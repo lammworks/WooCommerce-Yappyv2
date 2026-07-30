@@ -32,6 +32,10 @@ WooCommerce order-pay page remains a fallback for direct payment links, browsers
 component, and the Checkout block (whose Store API response cannot safely carry the short-lived
 Yappy credentials into the classic component).
 
+After Yappy accepts the transaction request, checkout stays visible with a small animated status
+panel that tells the customer to finish in the Yappy app. The receipt page is only shown after the
+signed IPN confirms that payment was completed.
+
 ## Requirements
 
 | | |

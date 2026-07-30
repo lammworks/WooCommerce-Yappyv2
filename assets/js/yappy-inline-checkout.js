@@ -66,6 +66,32 @@
 		box.textContent = message || '';
 	}
 
+	function showWaiting() {
+		var waiting = document.getElementById( 'wc-yappy-inline-waiting' );
+		var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
+		var message = document.getElementById( 'wc-yappy-inline-waiting-message' );
+		var description = getRoot() && getRoot().querySelector( '.wc-yappy__description, .wc-yappy__hint' );
+
+		if ( title ) {
+			title.textContent = i18n.confirming || 'Confirming your payment with Yappy…';
+		}
+
+		if ( message ) {
+			message.textContent = description ? description.textContent.trim() : '';
+		}
+
+		if ( waiting ) {
+			waiting.hidden = false;
+		}
+	}
+
+	function hideWaiting() {
+		var waiting = document.getElementById( 'wc-yappy-inline-waiting' );
+		if ( waiting ) {
+			waiting.hidden = true;
+		}
+	}
+
 	function normalizePhone( value ) {
 		var digits = String( value || '' ).replace( /\D/g, '' );
 
@@ -85,6 +111,7 @@
 	function resetCheckoutAttempt() {
 		busy = false;
 		setLoading( false );
+		hideWaiting();
 		var marker = getRequestMarker();
 		if ( marker ) {
 			marker.value = '0';
@@ -155,6 +182,7 @@
 
 	function pollUntilPaid( attemptsLeft ) {
 		setStatus( i18n.confirming );
+		showWaiting();
 
 		postStatus()
 			.then( function ( result ) {
@@ -276,6 +304,7 @@
 			token: payment.token,
 			documentName: payment.documentName,
 		} );
+		showWaiting();
 	} );
 
 	$( function () {

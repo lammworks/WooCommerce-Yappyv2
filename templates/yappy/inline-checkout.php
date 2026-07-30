@@ -44,5 +44,13 @@ defined( 'ABSPATH' ) || exit;
 	<div class="wc-yappy__notice wc-yappy__notice--info" id="wc-yappy-inline-status" role="status" hidden></div>
 	<div class="wc-yappy__button" id="wc-yappy-inline-button"></div>
 
+	<div class="wc-yappy__waiting" id="wc-yappy-inline-waiting" role="status" aria-live="polite" hidden>
+		<div class="wc-yappy__waiting-card">
+			<span class="wc-yappy__spinner" aria-hidden="true"></span>
+			<p class="wc-yappy__waiting-title" id="wc-yappy-inline-waiting-title"></p>
+			<p class="wc-yappy__waiting-message" id="wc-yappy-inline-waiting-message"></p>
+		</div>
+	</div>
+
 	<input type="hidden" id="wc-yappy-inline-request" name="wc_yappy_inline" value="0" />
 </div>

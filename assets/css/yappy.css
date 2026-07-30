@@ -64,3 +64,67 @@
 .wc-yappy--inline .wc-yappy__button {
 	margin-bottom: 0;
 }
+
+/*
+ * Yappy confirms the payment in its mobile app and tells the store through the
+ * IPN. Keep that in-progress state visible without obscuring Yappy's own QR or
+ * transaction modal when it is being used on a desktop browser.
+ */
+.wc-yappy__waiting {
+	bottom: 1.25rem;
+	left: 50%;
+	max-width: calc( 100vw - 2rem );
+	pointer-events: none;
+	position: fixed;
+	transform: translateX( -50% );
+	width: 28rem;
+	z-index: 1000;
+}
+
+.wc-yappy__waiting-card {
+	align-items: center;
+	background: #fff;
+	border-radius: 0.75rem;
+	box-shadow: 0 0.75rem 2rem rgba( 0, 0, 0, 0.2 );
+	display: grid;
+	grid-template-columns: auto 1fr;
+	column-gap: 0.75rem;
+	padding: 1rem 1.125rem;
+}
+
+.wc-yappy__spinner {
+	animation: wc-yappy-spin 0.85s linear infinite;
+	border: 0.2rem solid rgba( 0, 78, 145, 0.2 );
+	border-radius: 50%;
+	border-top-color: #004e91;
+	grid-row: 1 / span 2;
+	height: 1.75rem;
+	width: 1.75rem;
+}
+
+.wc-yappy__waiting-title,
+.wc-yappy__waiting-message {
+	margin: 0;
+}
+
+.wc-yappy__waiting-title {
+	font-weight: 700;
+}
+
+.wc-yappy__waiting-message {
+	font-size: 0.875rem;
+	margin-top: 0.2rem;
+	opacity: 0.8;
+}
+
+@keyframes wc-yappy-spin {
+	to {
+		transform: rotate( 360deg );
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wc-yappy__spinner {
+		animation: none;
+	}
+}
