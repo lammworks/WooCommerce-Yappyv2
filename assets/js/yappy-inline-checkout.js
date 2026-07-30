@@ -204,6 +204,10 @@
 		if ( marker ) {
 			marker.value = '0';
 		}
+		// WooCommerce rejected or errored the submit (for example, terms of service
+		// left unchecked). The Yappy button that triggered it is now stuck disabled,
+		// so replace it with a fresh one the customer can press again.
+		remountYappyButton();
 	}
 
 	function loadComponent() {
@@ -298,25 +302,38 @@
 		showError( terminalMessage( status ) );
 	}
 
+	// The official <btn-yappy> component disables its own button once it has been
+	// clicked, and it offers no reliable way to re-enable it. Whenever an attempt
+	// ends without navigating away — the customer dismisses the waiting card, or
+	// WooCommerce rejects the submit (unchecked terms, a validation error) — the
+	// old button is therefore stuck. Replace it with a fresh, enabled one instead
+	// of trying to revive it. This keeps the customer's form input (the phone
+	// number they may be correcting) intact, unlike a full page reload.
+	function remountYappyButton() {
+		var container = getContainer();
+		if ( container ) {
+			container.innerHTML = '';
+		}
+		activeButton = null;
+		payment = undefined;
+		retryReady = false;
+		mountButton();
+	}
+
 	// The customer closed the waiting card. There is no browser-side cancel in the
 	// Yappy API, but the intent is clear — abandon this attempt, most often to
-	// correct a mistyped phone number. End the wait completely and arm a fresh
-	// request so the next press on the Yappy button starts over instead of finding
-	// a disabled button. Any payment still completed in the Yappy app is recorded
-	// server-side through the IPN regardless.
+	// correct a mistyped phone number. End the wait and mount a fresh button so a
+	// new request can be started. Any payment still completed in the Yappy app is
+	// recorded server-side through the IPN regardless.
 	function dismissPaymentAttempt() {
 		waitingForPayment = false;
 		busy = false;
-		// An order already exists for this checkout, so the next press should
-		// create a fresh Yappy request against it rather than re-submitting the
-		// whole checkout. Without an order yet, fall back to the initial flow.
-		retryReady = !! payment;
 		stopPaymentTimers();
-		setLoading( false );
 		setStatus( '' );
 		clearError();
 		hideWaiting();
 		unblockCheckoutForm();
+		remountYappyButton();
 	}
 
 	function pollPaymentStatus() {
