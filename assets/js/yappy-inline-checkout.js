@@ -179,12 +179,27 @@
 		}
 	}
 
+	// Release WooCommerce's blockUI overlay from the checkout form. WooCommerce
+	// leaves the form blocked after a successful submit because it normally
+	// navigates away; the inline flow answers with a same-document fragment, so
+	// nothing unblocks it unless we do. From the moment this plugin's own waiting
+	// card takes over as the modal, the underlying form must stay interactive so
+	// no terminal, error or expiry path can leave the customer stuck behind it.
+	function unblockCheckoutForm() {
+		var form = $( 'form.checkout' );
+		form.removeClass( 'processing' );
+		if ( typeof $.fn.unblock === 'function' ) {
+			form.unblock();
+		}
+	}
+
 	function resetCheckoutAttempt() {
 		busy = false;
 		setLoading( false );
 		waitingForPayment = false;
 		stopPaymentTimers();
 		hideWaiting();
+		unblockCheckoutForm();
 		var marker = getRequestMarker();
 		if ( marker ) {
 			marker.value = '0';
@@ -277,6 +292,9 @@
 		setLoading( false );
 		setStatus( '' );
 		hideWaiting();
+		// The waiting card was the only thing on top of WooCommerce's overlay;
+		// hiding it must not leave the retry button trapped behind that overlay.
+		unblockCheckoutForm();
 		showError( terminalMessage( status ) );
 	}
 
@@ -312,6 +330,10 @@
 		retryReady = false;
 		expiresAt = Date.now() + ( PAYMENT_TIMEOUT_SECONDS * 1000 );
 		stopPaymentTimers();
+		// This plugin's waiting card is now the modal, so hand the form back to
+		// the customer underneath it. WooCommerce is done with its submit and will
+		// not touch the form again until the next one.
+		unblockCheckoutForm();
 		showWaiting();
 		updateCountdown();
 		countdownTimer = window.setInterval( updateCountdown, 250 );
@@ -411,7 +433,11 @@
 
 		loadComponent()
 			.then( function () {
-				if ( ! getContainer() || getContainer() !== container ) {
+				// The guard at the top of mountButton ran before the component
+				// finished loading; re-check here so two overlapping mounts (the
+				// handler fires on both updated_checkout and payment_method_selected)
+				// cannot append a second button with its own live listeners.
+				if ( ! getContainer() || getContainer() !== container || container.querySelector( 'btn-yappy' ) ) {
 					return;
 				}
 
@@ -488,10 +514,7 @@
 		// still be cancelled from the Yappy app.
 		hideWaiting();
 		setLoading( false );
-		$( 'form.checkout' ).removeClass( 'processing' );
-		if ( typeof $.fn.unblock === 'function' ) {
-			$( 'form.checkout' ).unblock();
-		}
+		unblockCheckoutForm();
 	} );
 
 	$( function () {

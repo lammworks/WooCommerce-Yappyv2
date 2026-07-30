@@ -46,7 +46,7 @@ defined( 'ABSPATH' ) || exit;
 
 	<div class="wc-yappy__waiting" id="wc-yappy-inline-waiting" role="dialog" aria-modal="true" aria-labelledby="wc-yappy-inline-waiting-title" hidden>
 		<div class="wc-yappy__waiting-card">
-			<button class="wc-yappy__waiting-close" id="wc-yappy-inline-waiting-close" type="button" aria-label="Close">&times;</button>
+			<button class="wc-yappy__waiting-close" id="wc-yappy-inline-waiting-close" type="button" aria-label="<?php esc_attr_e( 'Close', 'woocommerce-yappy' ); ?>">&times;</button>
 			<span class="wc-yappy__spinner" aria-hidden="true"></span>
 			<p class="wc-yappy__waiting-title" id="wc-yappy-inline-waiting-title"></p>
 			<p class="wc-yappy__waiting-message" id="wc-yappy-inline-waiting-message"></p>
