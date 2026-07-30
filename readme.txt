@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.7
+Stable tag: 1.2.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.2.8 =
+* Close the waiting card automatically when its countdown reaches zero: the Yappy request has expired, so the attempt ends and a fresh button is offered instead of leaving a dead 0:00 timer on screen.
 
 = 1.2.7 =
 * Take down the waiting card as soon as the Yappy app reports the request ended (for example, the customer cancelled it there), instead of leaving it counting down over an already re-enabled button. Terminal results now end the attempt consistently and leave a fresh button ready.

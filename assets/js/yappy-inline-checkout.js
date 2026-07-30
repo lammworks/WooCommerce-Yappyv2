@@ -141,13 +141,11 @@
 			time.dateTime = 'PT' + seconds + 'S';
 		}
 
-		if ( seconds === 0 && countdownTimer ) {
-			window.clearInterval( countdownTimer );
-			countdownTimer = null;
-			var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
-			if ( title ) {
-				title.textContent = i18n.expired || i18n.confirming;
-			}
+		// The Yappy request only lives for the length of this countdown, so once it
+		// reaches zero the request has expired. Close the waiting card and hand the
+		// customer a fresh button rather than leaving a dead 0:00 timer on screen.
+		if ( seconds === 0 && waitingForPayment ) {
+			finishPaymentAttempt( 'X' );
 		}
 	}
 
