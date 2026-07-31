@@ -268,12 +268,20 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	 * @return string
 	 */
 	public function get_ipn_url() {
+		// The REST route is the default: full-page caches (Cloudflare and the
+		// built-in caches of managed hosts) routinely cache the /wc-api/ path and
+		// drop the query string from the cache key, which silently swallows the
+		// notification. The REST API is served dynamically and left uncached. The
+		// legacy /wc-api/wc_yappy/ endpoint stays registered for anyone who needs
+		// to point back at it through the filter.
+		$url = rest_url( WC_Yappy_IPN_Handler::REST_NAMESPACE . WC_Yappy_IPN_Handler::REST_ROUTE );
+
 		/**
 		 * Filter the IPN URL sent to Yappy.
 		 *
 		 * @param string $url IPN URL.
 		 */
-		return apply_filters( 'wc_yappy_ipn_url', WC()->api_request_url( 'wc_yappy' ) );
+		return apply_filters( 'wc_yappy_ipn_url', $url );
 	}
 
 	/**

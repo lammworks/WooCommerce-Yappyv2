@@ -16,70 +16,206 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Endpoint reachable at `/wc-api/wc_yappy/`.
+ * Endpoint reachable at `/wp-json/wc-yappy/v1/ipn` (default) and, as a legacy
+ * fallback, at `/wc-api/wc_yappy/`.
+ *
+ * The REST route is the default because full-page caches (Cloudflare, and the
+ * built-in caches of managed hosts) routinely cache the `/wc-api/` path and
+ * strip the query string from the cache key — which silently swallows every
+ * notification. The REST API is served dynamically and is left uncached by
+ * those same layers, so it delivers the callback reliably.
  */
 class WC_Yappy_IPN_Handler {
 
 	/**
-	 * Register the endpoint.
+	 * REST namespace for the IPN route.
+	 */
+	const REST_NAMESPACE = 'wc-yappy/v1';
+
+	/**
+	 * REST route for the IPN, relative to the namespace.
+	 */
+	const REST_ROUTE = '/ipn';
+
+	/**
+	 * Register both endpoints.
 	 *
 	 * @return void
 	 */
 	public static function init() {
 		add_action( 'woocommerce_api_wc_yappy', array( __CLASS__, 'handle' ) );
+		add_action( 'rest_api_init', array( __CLASS__, 'register_rest_endpoint' ) );
 	}
 
 	/**
-	 * Process an incoming notification.
+	 * Register the REST IPN route.
+	 *
+	 * Authentication is the HMAC in the payload, so the route itself is public;
+	 * `verify()` rejects anything unsigned before the order is touched.
+	 *
+	 * @return void
+	 */
+	public static function register_rest_endpoint() {
+		register_rest_route(
+			self::REST_NAMESPACE,
+			self::REST_ROUTE,
+			array(
+				'methods'             => array( 'GET', 'POST' ),
+				'callback'            => array( __CLASS__, 'handle_rest' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+	}
+
+	/**
+	 * Handle the legacy `/wc-api/wc_yappy/` callback.
 	 *
 	 * @return void
 	 */
 	public static function handle() {
-		$gateway = wc_yappy_get_gateway();
-
-		if ( ! $gateway ) {
-			self::respond( 503, 'Gateway unavailable' );
-		}
-
-		$log = $gateway->get_logger();
-
 		// The payload is authenticated by its HMAC, so the raw values are read
 		// verbatim: the signature covers the exact bytes Yappy sent, and any
 		// rewriting (URL normalisation in particular) would break verification.
 		// Nonce verification does not apply to a server-to-server callback.
 		// phpcs:disable WordPress.Security.NonceVerification
-		$source = ! empty( $_GET ) ? $_GET : $_POST;
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+
+		// Yappy delivers the result as a GET request. POST and a JSON body are
+		// read as well, so a reverse proxy that forwards the callback as a POST,
+		// or a JSON-style delivery, cannot silently drop it. The HMAC still covers
+		// the same values whichever way they arrive.
+		if ( ! empty( $_GET ) ) {
+			$source = wp_unslash( $_GET );
+		} elseif ( ! empty( $_POST ) ) {
+			$source = wp_unslash( $_POST );
+		} else {
+			$source = self::json_body();
+		}
+		// phpcs:enable WordPress.Security.NonceVerification
+
+		$result = self::process( (array) $source, $method );
+
+		self::respond( $result['code'], $result['message'] );
+	}
+
+	/**
+	 * Handle the REST `/wp-json/wc-yappy/v1/ipn` callback.
+	 *
+	 * @param WP_REST_Request $request Incoming request.
+	 * @return WP_REST_Response
+	 */
+	public static function handle_rest( $request ) {
+		// get_params() merges the query string and the body, so a GET (Yappy's
+		// default) and a JSON or form POST are all covered.
+		$result = self::process( (array) $request->get_params(), $request->get_method() );
+
+		$response = new WP_REST_Response( $result['message'], $result['code'] );
+		$response->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
+		$response->header( 'CDN-Cache-Control', 'no-store' );
+		$response->header( 'Cloudflare-CDN-Cache-Control', 'no-store' );
+
+		return $response;
+	}
+
+	/**
+	 * Decode a JSON request body into an array, or an empty array when there is
+	 * none.
+	 *
+	 * @return array
+	 */
+	protected static function json_body() {
+		$raw     = file_get_contents( 'php://input' );
+		$decoded = json_decode( (string) $raw, true );
+
+		return is_array( $decoded ) ? $decoded : array();
+	}
+
+	/**
+	 * Verify and act on a notification, whichever endpoint received it.
+	 *
+	 * @param array  $source Raw notification fields (query, body or JSON).
+	 * @param string $method HTTP method, for the log.
+	 * @return array{code:int,message:string} Response status and body.
+	 */
+	protected static function process( array $source, $method ) {
+		// The IPN must never be served from a cache: a cached response means the
+		// notification never reaches this handler and the order is never marked
+		// paid. These constants ask the common page caches (host reverse-proxy
+		// caches and caching plugins alike) to skip this request.
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		}
+		if ( ! defined( 'DONOTCACHEOBJECT' ) ) {
+			define( 'DONOTCACHEOBJECT', true );
+		}
+
+		$gateway = wc_yappy_get_gateway();
+
+		if ( ! $gateway ) {
+			// Record the hit even though the gateway is missing: this is always
+			// logged, so a reachability test (or a real notification) proves the
+			// request got as far as PHP even when nothing else could run.
+			if ( function_exists( 'wc_get_logger' ) ) {
+				wc_get_logger()->error(
+					'IPN endpoint reached but the Yappy gateway is unavailable.',
+					array( 'source' => 'yappy' )
+				);
+			}
+			return array( 'code' => 503, 'message' => 'Gateway unavailable' );
+		}
+
+		$log = $gateway->get_logger();
+
 		$params = array();
 		foreach ( array( 'orderId', 'status', 'domain', 'hash', 'confirmationNumber' ) as $field ) {
 			// A caller can send `?orderId[]=x`; anything that is not a scalar is
 			// read as absent rather than coerced.
 			$params[ $field ] = isset( $source[ $field ] ) && is_scalar( $source[ $field ] )
-				? (string) wp_unslash( $source[ $field ] )
+				? (string) $source[ $field ]
 				: '';
 		}
-		// phpcs:enable WordPress.Security.NonceVerification
 
 		$log->debug(
 			'IPN received.',
 			array(
-				'orderId' => sanitize_text_field( $params['orderId'] ),
-				'status'  => sanitize_text_field( $params['status'] ),
+				'method'             => $method,
+				'orderId'            => sanitize_text_field( $params['orderId'] ),
+				'status'             => sanitize_text_field( $params['status'] ),
+				'domain'             => sanitize_text_field( $params['domain'] ),
+				'hasHash'            => '' !== $params['hash'],
+				'confirmationNumber' => sanitize_text_field( $params['confirmationNumber'] ),
 			)
 		);
 
 		if ( ! WC_Yappy_Signature::verify( $params, $gateway->get_secret_key() ) ) {
+			$secret = $gateway->get_secret_key();
 			$log->error(
 				'IPN rejected: signature mismatch.',
 				array( 'orderId' => sanitize_text_field( $params['orderId'] ) )
 			);
-			self::respond( 400, 'Invalid hash' );
+			// Debug-only detail to tell the three failure modes apart: an empty
+			// payload (nothing was parsed), a missing secret key (keyConfigured is
+			// false), or a genuine hash/algorithm mismatch (the signed string and
+			// key look right but the digests differ). The signed values and the
+			// provided hash already travel in the request, so nothing secret is
+			// added to the log here.
+			$log->debug(
+				'IPN signature detail.',
+				array(
+					'signed'        => $params['orderId'] . $params['status'] . $params['domain'],
+					'provided'      => $params['hash'],
+					'expected'      => WC_Yappy_Signature::calculate( $params['orderId'], $params['status'], $params['domain'], $secret ),
+					'keyConfigured' => '' !== $secret,
+				)
+			);
+			return array( 'code' => 400, 'message' => 'Invalid hash' );
 		}
 
 		// Past this point the payload is authenticated. Shape checks still run,
 		// because a valid signature proves origin, not that the values are usable.
 		if ( ! WC_Yappy_Status::is_valid( $params['status'] ) ) {
 			$log->error( 'IPN rejected: unknown status.', array( 'status' => sanitize_text_field( $params['status'] ) ) );
-			self::respond( 400, 'Unknown status' );
+			return array( 'code' => 400, 'message' => 'Unknown status' );
 		}
 
 		$params['confirmationNumber'] = sanitize_text_field( $params['confirmationNumber'] );
@@ -90,7 +226,7 @@ class WC_Yappy_IPN_Handler {
 		if ( ! $order ) {
 			$log->error( 'IPN rejected: no order for reference.', array( 'orderId' => sanitize_text_field( $params['orderId'] ) ) );
 			// The signature was valid, so there is nothing for Yappy to retry.
-			self::respond( 200, 'Order not found' );
+			return array( 'code' => 200, 'message' => 'Order not found' );
 		}
 
 		if ( ! $gateway->reference_belongs_to_order( $order, $params['orderId'] ) ) {
@@ -101,12 +237,12 @@ class WC_Yappy_IPN_Handler {
 					'order'   => $order->get_id(),
 				)
 			);
-			self::respond( 200, 'Reference mismatch' );
+			return array( 'code' => 200, 'message' => 'Reference mismatch' );
 		}
 
 		self::apply_status( $gateway, $order, $params );
 
-		self::respond( 200, 'OK' );
+		return array( 'code' => 200, 'message' => 'OK' );
 	}
 
 	/**
@@ -217,6 +353,13 @@ class WC_Yappy_IPN_Handler {
 	protected static function respond( $code, $message ) {
 		status_header( $code );
 		nocache_headers();
+		// Explicit no-store, including the CDN-specific directives Cloudflare and
+		// other edge caches honour, so a well-behaved cache does not retain the
+		// response. A cache forced to "cache everything" still needs a bypass rule
+		// for /wc-api/ in its own configuration.
+		header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+		header( 'CDN-Cache-Control: no-store' );
+		header( 'Cloudflare-CDN-Cache-Control: no-store' );
 		header( 'Content-Type: text/plain; charset=utf-8' );
 		echo esc_html( $message );
 		exit;

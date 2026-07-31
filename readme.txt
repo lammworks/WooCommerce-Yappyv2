@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.4
+Stable tag: 1.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,32 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.3.0 =
+* Deliver the IPN over the WordPress REST API (`/wp-json/wc-yappy/v1/ipn`) by default, because full-page caches — Cloudflare and the built-in caches of managed hosts such as GoDaddy — cache the `/wc-api/` path and drop the query string from the cache key, silently swallowing every payment notification. The REST route is served dynamically and left uncached, so orders are marked paid reliably. The legacy `/wc-api/wc_yappy/` endpoint stays available and can be re-selected through the `wc_yappy_ipn_url` filter. The IPN URL is sent to Yappy on every request, so no re-registration is needed.
+
+= 1.2.11 =
+* Mark the IPN endpoint as non-cacheable (DONOTCACHEPAGE and explicit no-store / CDN-Cache-Control headers) so page and object caches do not retain it. Note: an edge cache such as Cloudflare set to "cache everything" still needs a bypass rule for /wc-api/ in its own configuration — a cached IPN response never reaches the store and leaves the order unpaid.
+
+= 1.2.10 =
+* Log the IPN endpoint being reached even when the gateway is momentarily unavailable, so a reachability test proves whether Yappy's notification actually arrives at the store.
+
+= 1.2.9 =
+* Accept the IPN as a POST or JSON body in addition to the documented GET, so a reverse proxy or a POST-style delivery cannot silently drop a payment notification.
+* Log the received IPN request and, on a signature mismatch, enough detail (with debug logging enabled) to tell an empty payload, a missing secret key and a genuine hash mismatch apart — to diagnose orders that stay pending after payment.
+
+= 1.2.8 =
+* Close the waiting card automatically when its countdown reaches zero: the Yappy request has expired, so the attempt ends and a fresh button is offered instead of leaving a dead 0:00 timer on screen.
+
+= 1.2.7 =
+* Take down the waiting card as soon as the Yappy app reports the request ended (for example, the customer cancelled it there), instead of leaving it counting down over an already re-enabled button. Terminal results now end the attempt consistently and leave a fresh button ready.
+
+= 1.2.6 =
+* Replace the Yappy button with a fresh, enabled one whenever an attempt ends in place — after the waiting card is closed, or after WooCommerce rejects the submit (for example, terms of service left unchecked) — because the official component cannot re-enable its own button once pressed. The customer's phone number entry is preserved.
+
+= 1.2.5 =
+* Fix the inline checkout so closing the Yappy waiting card cancels the attempt and re-enables the Yappy button, letting the customer submit a fresh request (for example, after correcting a mistyped phone number).
+* Stop a dismissed waiting card from reappearing when the Yappy component reports a late result.
 
 = 1.2.4 =
 * Clear WooCommerce's checkout-processing overlay when the waiting-card close control is pressed while safely keeping the payment request monitored.

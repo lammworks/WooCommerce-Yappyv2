@@ -141,13 +141,11 @@
 			time.dateTime = 'PT' + seconds + 'S';
 		}
 
-		if ( seconds === 0 && countdownTimer ) {
-			window.clearInterval( countdownTimer );
-			countdownTimer = null;
-			var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
-			if ( title ) {
-				title.textContent = i18n.expired || i18n.confirming;
-			}
+		// The Yappy request only lives for the length of this countdown, so once it
+		// reaches zero the request has expired. Close the waiting card and hand the
+		// customer a fresh button rather than leaving a dead 0:00 timer on screen.
+		if ( seconds === 0 && waitingForPayment ) {
+			finishPaymentAttempt( 'X' );
 		}
 	}
 
@@ -204,6 +202,10 @@
 		if ( marker ) {
 			marker.value = '0';
 		}
+		// WooCommerce rejected or errored the submit (for example, terms of service
+		// left unchecked). The Yappy button that triggered it is now stuck disabled,
+		// so replace it with a fresh one the customer can press again.
+		remountYappyButton();
 	}
 
 	function loadComponent() {
@@ -284,18 +286,53 @@
 		return i18n.expired || i18n.genericError;
 	}
 
-	function finishPaymentAttempt( status ) {
+	// End the current attempt and return the checkout to a state the customer can
+	// act on: stop the timers, take down the waiting card, release WooCommerce's
+	// overlay, and mount a fresh Yappy button (the old one cannot be re-enabled
+	// once pressed). `message`, when given, is shown as the reason it ended.
+	function concludeAttempt( message ) {
 		waitingForPayment = false;
 		busy = false;
-		retryReady = true;
 		stopPaymentTimers();
-		setLoading( false );
 		setStatus( '' );
 		hideWaiting();
-		// The waiting card was the only thing on top of WooCommerce's overlay;
-		// hiding it must not leave the retry button trapped behind that overlay.
 		unblockCheckoutForm();
-		showError( terminalMessage( status ) );
+		remountYappyButton();
+		if ( message ) {
+			showError( message );
+		}
+	}
+
+	function finishPaymentAttempt( status ) {
+		concludeAttempt( terminalMessage( status ) );
+	}
+
+	// The official <btn-yappy> component disables its own button once it has been
+	// clicked, and it offers no reliable way to re-enable it. Whenever an attempt
+	// ends without navigating away — the customer dismisses the waiting card, or
+	// WooCommerce rejects the submit (unchecked terms, a validation error) — the
+	// old button is therefore stuck. Replace it with a fresh, enabled one instead
+	// of trying to revive it. This keeps the customer's form input (the phone
+	// number they may be correcting) intact, unlike a full page reload.
+	function remountYappyButton() {
+		var container = getContainer();
+		if ( container ) {
+			container.innerHTML = '';
+		}
+		activeButton = null;
+		payment = undefined;
+		retryReady = false;
+		mountButton();
+	}
+
+	// The customer closed the waiting card. There is no browser-side cancel in the
+	// Yappy API, but the intent is clear — abandon this attempt, most often to
+	// correct a mistyped phone number. End the wait and mount a fresh button so a
+	// new request can be started. Any payment still completed in the Yappy app is
+	// recorded server-side through the IPN regardless.
+	function dismissPaymentAttempt() {
+		clearError();
+		concludeAttempt();
 	}
 
 	function pollPaymentStatus() {
@@ -341,6 +378,11 @@
 	}
 
 	function retryPayment() {
+		// Guard against a second press while the fresh request is still in flight.
+		if ( busy ) {
+			return;
+		}
+
 		var phoneField = document.getElementById( 'wc-yappy-phone' );
 		var phone = phoneField ? phoneField.value.trim() : '';
 
@@ -461,6 +503,13 @@
 				button.addEventListener( 'eventClick', submitCheckoutFromYappy );
 
 				button.addEventListener( 'eventSuccess', function () {
+					// Only react while an attempt is actually live. Once the customer
+					// has dismissed the card or a terminal result has arrived, a late
+					// success signal from the component must not reopen the dialog or
+					// restart polling on its own.
+					if ( ! busy && ! waitingForPayment ) {
+						return;
+					}
 					setStatus( i18n.confirming );
 					if ( ! waitingForPayment ) {
 						beginPaymentWait();
@@ -468,16 +517,20 @@
 				} );
 
 				button.addEventListener( 'eventError', function ( event ) {
+					var detail = event && event.detail && event.detail.message ? event.detail.message : '';
+
 					if ( waitingForPayment ) {
-						// Yappy may emit this before its IPN reaches the store. Keep
-						// polling so the customer receives the final C/R/X state.
-						setLoading( false );
+						// The Yappy app reported the request ended — most often the
+						// customer cancelled it there. The component learns this before
+						// the store's IPN does, so end the attempt now rather than
+						// leaving the waiting card counting down over a live button.
+						concludeAttempt( detail || i18n.cancelled || i18n.genericError );
 						return;
 					}
 
 					resetCheckoutAttempt();
 					setStatus( '' );
-					showError( event && event.detail && event.detail.message ? event.detail.message : i18n.genericError );
+					showError( detail || i18n.genericError );
 				} );
 
 				activeButton = button;
@@ -507,15 +560,7 @@
 
 	$( document.body ).on( 'checkout_error', resetCheckoutAttempt );
 
-	$( document.body ).on( 'click', '#wc-yappy-inline-waiting-close', function () {
-		// The Yappy API does not provide a browser-side cancellation endpoint.
-		// This returns the shopper to checkout and keeps polling until Yappy sends
-		// its authoritative result through the IPN. The outstanding request can
-		// still be cancelled from the Yappy app.
-		hideWaiting();
-		setLoading( false );
-		unblockCheckoutForm();
-	} );
+	$( document.body ).on( 'click', '#wc-yappy-inline-waiting-close', dismissPaymentAttempt );
 
 	$( function () {
 		bindCheckoutSuccess();
