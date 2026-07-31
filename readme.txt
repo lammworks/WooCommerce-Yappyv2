@@ -4,7 +4,7 @@ Tags: woocommerce, payment gateway, yappy, panama, banco general
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.11
+Stable tag: 1.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ No. The Botón de Pago integration does not expose a refund endpoint; refunds ar
 Executed (paid), Rejected (marked failed), Cancelled (marked cancelled) and Expired (marked failed).
 
 == Changelog ==
+
+= 1.3.0 =
+* Deliver the IPN over the WordPress REST API (`/wp-json/wc-yappy/v1/ipn`) by default, because full-page caches — Cloudflare and the built-in caches of managed hosts such as GoDaddy — cache the `/wc-api/` path and drop the query string from the cache key, silently swallowing every payment notification. The REST route is served dynamically and left uncached, so orders are marked paid reliably. The legacy `/wc-api/wc_yappy/` endpoint stays available and can be re-selected through the `wc_yappy_ipn_url` filter. The IPN URL is sent to Yappy on every request, so no re-registration is needed.
 
 = 1.2.11 =
 * Mark the IPN endpoint as non-cacheable (DONOTCACHEPAGE and explicit no-store / CDN-Cache-Control headers) so page and object caches do not retain it. Note: an edge cache such as Cloudflare set to "cache everything" still needs a bypass rule for /wc-api/ in its own configuration — a cached IPN response never reaches the store and leaves the order unpaid.
