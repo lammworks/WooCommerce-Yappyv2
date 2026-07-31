@@ -35,6 +35,19 @@ class WC_Yappy_IPN_Handler {
 	 * @return void
 	 */
 	public static function handle() {
+		// The IPN must never be served from a cache: a cached response means the
+		// notification never reaches this handler and the order is never marked
+		// paid. These constants ask the common page caches (host reverse-proxy
+		// caches and caching plugins alike) to skip this request. Edge caches such
+		// as Cloudflare still have to be told to bypass /wc-api/ in their own
+		// configuration — no origin header can guarantee that from here.
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		}
+		if ( ! defined( 'DONOTCACHEOBJECT' ) ) {
+			define( 'DONOTCACHEOBJECT', true );
+		}
+
 		$gateway = wc_yappy_get_gateway();
 
 		if ( ! $gateway ) {
@@ -261,6 +274,13 @@ class WC_Yappy_IPN_Handler {
 	protected static function respond( $code, $message ) {
 		status_header( $code );
 		nocache_headers();
+		// Explicit no-store, including the CDN-specific directives Cloudflare and
+		// other edge caches honour, so a well-behaved cache does not retain the
+		// response. A cache forced to "cache everything" still needs a bypass rule
+		// for /wc-api/ in its own configuration.
+		header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+		header( 'CDN-Cache-Control: no-store' );
+		header( 'Cloudflare-CDN-Cache-Control: no-store' );
 		header( 'Content-Type: text/plain; charset=utf-8' );
 		echo esc_html( $message );
 		exit;
