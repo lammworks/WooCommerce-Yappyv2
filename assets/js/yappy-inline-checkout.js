@@ -89,7 +89,15 @@
 			return;
 		}
 
+		// Payment is already confirmed, so this does not mount another Yappy
+		// button — that would submit checkout again. Drop the waiting card,
+		// which is a fixed overlay, so the error is not hidden behind it.
+		waitingForPayment = false;
+		busy = false;
+		stopPaymentTimers();
 		setStatus( '' );
+		hideWaiting();
+		unblockCheckoutForm();
 		showError( i18n.genericError );
 	}
 
