@@ -73,6 +73,34 @@
 		box.textContent = message || '';
 	}
 
+	/**
+	 * Leave for the WooCommerce thank-you page once the IPN has confirmed payment.
+	 *
+	 * Both candidates come from store JSON (the status poll, then the checkout
+	 * response). They are assigned only after the redirect helper accepts http(s)
+	 * on this store or a known Yappy endpoint.
+	 *
+	 * @param {string} preferred Return URL from the status response.
+	 */
+	function goToReturnUrl( preferred ) {
+		var fallback = payment && payment.returnUrl;
+
+		if ( window.wcYappyRedirect && window.wcYappyRedirect.assign( [ preferred, fallback ] ) ) {
+			return;
+		}
+
+		// Payment is already confirmed, so this does not mount another Yappy
+		// button — that would submit checkout again. Drop the waiting card,
+		// which is a fixed overlay, so the error is not hidden behind it.
+		waitingForPayment = false;
+		busy = false;
+		stopPaymentTimers();
+		setStatus( '' );
+		hideWaiting();
+		unblockCheckoutForm();
+		showError( i18n.genericError );
+	}
+
 	function showWaiting() {
 		var waiting = document.getElementById( 'wc-yappy-inline-waiting' );
 		var title = document.getElementById( 'wc-yappy-inline-waiting-title' );
@@ -344,7 +372,7 @@
 			.then( function ( result ) {
 				if ( result.paid ) {
 					stopPaymentTimers();
-					window.location.href = result.returnUrl || payment.returnUrl;
+					goToReturnUrl( result.returnUrl );
 					return;
 				}
 

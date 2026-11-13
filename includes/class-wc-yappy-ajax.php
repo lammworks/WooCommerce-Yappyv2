@@ -160,7 +160,10 @@ class WC_Yappy_Ajax {
 				'paid'        => $order->is_paid(),
 				'status'      => $order->get_status(),
 				'yappyStatus' => (string) $order->get_meta( WC_Yappy_Gateway::META_LAST_STATUS ),
-				'returnUrl'   => $order->get_checkout_order_received_url(),
+				// Built from the store URL, not from the request. Reject anything
+				// other than an http(s) URL on an allowed host before it reaches
+				// the browser. The script checks the value again before navigating.
+				'returnUrl'   => wp_validate_redirect( $order->get_checkout_order_received_url(), home_url( '/' ) ),
 			)
 		);
 	}

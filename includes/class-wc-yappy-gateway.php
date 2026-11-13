@@ -479,7 +479,7 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 						'orderId'   => $order->get_id(),
 						'orderKey'  => $order->get_order_key(),
 						'nonce'     => wp_create_nonce( 'wc_yappy_pay_' . $order->get_id() ),
-						'returnUrl' => $this->get_return_url( $order ),
+						'returnUrl' => wp_validate_redirect( $this->get_return_url( $order ), home_url( '/' ) ),
 					)
 				),
 			);
@@ -546,6 +546,21 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	}
 
 	/**
+	 * Register the script that checks a return URL before navigating.
+	 *
+	 * @return void
+	 */
+	protected function enqueue_redirect_script() {
+		wp_enqueue_script(
+			'wc-yappy-redirect',
+			WC_YAPPY_PLUGIN_URL . 'assets/js/yappy-redirect.js',
+			array(),
+			WC_YAPPY_VERSION,
+			true
+		);
+	}
+
+	/**
 	 * Register and enqueue the assets used by the payment page.
 	 *
 	 * @param WC_Order $order Order being paid.
@@ -559,23 +574,26 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 			WC_YAPPY_VERSION
 		);
 
+		$this->enqueue_redirect_script();
+
 		wp_enqueue_script(
 			'wc-yappy-checkout',
 			WC_YAPPY_PLUGIN_URL . 'assets/js/yappy-checkout.js',
-			array(),
+			array( 'wc-yappy-redirect' ),
 			WC_YAPPY_VERSION,
 			true
 		);
 
 		$params = array(
 			'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+			'checkoutUrl'  => wc_get_checkout_url(),
 			'cdnUrl'       => $this->get_api_client()->get_cdn_url(),
 			'orderId'      => $order->get_id(),
 			'orderKey'     => $order->get_order_key(),
 			'nonce'        => wp_create_nonce( 'wc_yappy_pay_' . $order->get_id() ),
 			'theme'        => $this->get_option( 'button_theme', 'blue' ),
 			'rounded'      => 'yes' === $this->get_option( 'button_rounded', 'yes' ) ? 'true' : 'false',
-			'returnUrl'    => $this->get_return_url( $order ),
+			'returnUrl'    => wp_validate_redirect( $this->get_return_url( $order ), home_url( '/' ) ),
 			'askPhone'     => 'yes' === $this->get_option( 'ask_phone', 'yes' ),
 			'pollAttempts' => (int) apply_filters( 'wc_yappy_status_poll_attempts', 10 ),
 			'pollInterval' => (int) apply_filters( 'wc_yappy_status_poll_interval', 2000 ),
@@ -610,21 +628,24 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 			WC_YAPPY_VERSION
 		);
 
+		$this->enqueue_redirect_script();
+
 		wp_enqueue_script(
 			'wc-yappy-inline-checkout',
 			WC_YAPPY_PLUGIN_URL . 'assets/js/yappy-inline-checkout.js',
-			array( 'jquery', 'wc-checkout' ),
+			array( 'jquery', 'wc-checkout', 'wc-yappy-redirect' ),
 			WC_YAPPY_VERSION,
 			true
 		);
 
 		$params = array(
-			'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-			'cdnUrl'   => $this->get_api_client()->get_cdn_url(),
-			'theme'     => $this->get_option( 'button_theme', 'blue' ),
-			'rounded'   => 'yes' === $this->get_option( 'button_rounded', 'yes' ) ? 'true' : 'false',
-			'askPhone'  => 'yes' === $this->get_option( 'ask_phone', 'yes' ),
-			'i18n'      => array(
+			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+			'checkoutUrl' => wc_get_checkout_url(),
+			'cdnUrl'      => $this->get_api_client()->get_cdn_url(),
+			'theme'       => $this->get_option( 'button_theme', 'blue' ),
+			'rounded'     => 'yes' === $this->get_option( 'button_rounded', 'yes' ) ? 'true' : 'false',
+			'askPhone'    => 'yes' === $this->get_option( 'ask_phone', 'yes' ),
+			'i18n'        => array(
 				'loadFailed'   => __( 'The Yappy button could not be loaded. Please refresh the page and try again.', 'woocommerce-yappy' ),
 				'genericError' => __( 'Something went wrong with Yappy. Please try again.', 'woocommerce-yappy' ),
 				'invalidPhone' => __( 'Enter a valid Panamanian mobile number, for example 61234567. Leave it empty to pay by QR code.', 'woocommerce-yappy' ),

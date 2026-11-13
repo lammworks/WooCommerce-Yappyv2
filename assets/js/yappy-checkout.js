@@ -78,6 +78,24 @@
 	}
 
 	/**
+	 * Leave for the WooCommerce thank-you page.
+	 *
+	 * `preferred` is the return URL from the status response. `params.returnUrl`
+	 * is the same kind of URL printed with the page. Neither is used until
+	 * `wcYappyRedirect` has accepted it as http(s) on this store or a Yappy endpoint.
+	 *
+	 * @param {string} preferred Return URL from the latest response, if any.
+	 */
+	function goToReturnUrl( preferred ) {
+		if ( window.wcYappyRedirect && window.wcYappyRedirect.assign( [ preferred, params.returnUrl ] ) ) {
+			return;
+		}
+
+		setStatus( '' );
+		showError( i18n.genericError );
+	}
+
+	/**
 	 * Normalise a phone number the way the server does.
 	 *
 	 * @param {string} value Raw input.
@@ -188,13 +206,13 @@
 		post( 'wc_yappy_order_status', {} )
 			.then( function ( data ) {
 				if ( data.paid ) {
-					window.location.href = data.returnUrl || params.returnUrl;
+					goToReturnUrl( data.returnUrl );
 					return;
 				}
 
 				if ( attemptsLeft <= 0 ) {
 					// The order page explains that confirmation is still pending.
-					window.location.href = params.returnUrl;
+					goToReturnUrl( params.returnUrl );
 					return;
 				}
 
@@ -207,7 +225,7 @@
 				// result. Keep polling until the attempts are spent, then fall back
 				// to the order-received page, which explains a pending payment.
 				if ( attemptsLeft <= 0 ) {
-					window.location.href = params.returnUrl;
+					goToReturnUrl( params.returnUrl );
 					return;
 				}
 
@@ -285,7 +303,7 @@
 
 					// The order was already paid while the page was open.
 					if ( error.data && error.data.paid ) {
-						window.location.href = params.returnUrl;
+						goToReturnUrl( params.returnUrl );
 						return;
 					}
 
