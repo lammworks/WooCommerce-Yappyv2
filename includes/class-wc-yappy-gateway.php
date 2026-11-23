@@ -13,6 +13,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
+require_once __DIR__ . '/class-wc-yappy-rate-limiter.php';
+
 /**
  * WooCommerce payment gateway backed by the Yappy Botón de Pago API.
  */
@@ -452,6 +454,16 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 				);
 				wc_add_notice( $e->get_customer_message(), 'error' );
 				return array( 'result' => 'failure' );
+			} catch ( WC_Yappy_Rate_Limit_Exception $e ) {
+				$this->log->error(
+					'Refused the inline Yappy order.',
+					array(
+						'order' => $order->get_id(),
+						'error' => $e->getMessage(),
+					)
+				);
+				wc_add_notice( $e->get_customer_message(), 'error' );
+				return array( 'result' => 'failure' );
 			} catch ( Exception $e ) {
 				$this->log->error(
 					'Could not prepare the inline Yappy order.',
@@ -689,6 +701,7 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 	 * @param string   $phone Raw phone number typed by the customer, may be empty.
 	 * @return array{transactionId:string,token:string,documentName:string}
 	 * @throws WC_Yappy_API_Exception When Yappy rejects the order.
+	 * @throws WC_Yappy_Rate_Limit_Exception When too many payments were created for the order or client.
 	 * @throws InvalidArgumentException When the order amounts are not payable.
 	 */
 	public function create_yappy_order( $order, $phone = '' ) {
@@ -736,6 +749,8 @@ class WC_Yappy_Gateway extends WC_Payment_Gateway {
 		 * @param WC_Order $order Order being paid.
 		 */
 		$args = apply_filters( 'wc_yappy_create_order_args', $args, $order );
+
+		WC_Yappy_Rate_Limiter::reserve( $order->get_id() );
 
 		$result = $this->get_api_client()->init_checkout( $args );
 

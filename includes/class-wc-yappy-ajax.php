@@ -127,6 +127,15 @@ class WC_Yappy_Ajax {
 				)
 			);
 			wp_send_json_error( array( 'message' => $e->get_customer_message() ), 502 );
+		} catch ( WC_Yappy_Rate_Limit_Exception $e ) {
+			$gateway->get_logger()->error(
+				'Refused the Yappy order.',
+				array(
+					'order' => $order->get_id(),
+					'error' => $e->getMessage(),
+				)
+			);
+			wp_send_json_error( array( 'message' => $e->get_customer_message() ), 429 );
 		} catch ( Exception $e ) {
 			$gateway->get_logger()->error(
 				'Could not prepare the Yappy order.',
