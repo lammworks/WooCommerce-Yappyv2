@@ -78,6 +78,7 @@ class WC_Yappy_Plugin {
 		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-reference.php';
 		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-amounts.php';
 		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-phone.php';
+		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-rate-limiter.php';
 		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-gateway.php';
 		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-ipn-handler.php';
 		require_once WC_YAPPY_PLUGIN_DIR . 'includes/class-wc-yappy-ajax.php';

@@ -171,6 +171,8 @@ Use `wc_yappy_create_order_args` if your store needs a different split.
 | `wc_yappy_create_order_args` | Adjust the create-order payload. |
 | `wc_yappy_request_args` | Adjust `wp_remote_post()` arguments. |
 | `wc_yappy_status_poll_attempts` / `wc_yappy_status_poll_interval` | Tune the post-payment poll. |
+| `wc_yappy_rate_limits` | Caps on Yappy payment creation: `per_order` (default 3 per 24 hours) and `per_address` (default 5 per hour), with `per_order_window` / `per_address_window` in seconds. |
+| `wc_yappy_rate_limit_client_address` | Client address the per-address cap counts. Defaults to `REMOTE_ADDR`; set it from a header your reverse proxy overwrites when the store runs behind one. |
 
 ## Development
 
